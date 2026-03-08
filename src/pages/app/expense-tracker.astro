@@ -1,0 +1,444 @@
+---
+import {
+  AvBreadcrumb,
+  AvButton,
+  AvCard,
+  AvContainer,
+  AvEmptyState,
+} from "@ansiversa/components";
+import { actions } from "astro:actions";
+import TransactionDrawer from "../../components/drawers/TransactionDrawer.astro";
+import { buildExpenseTrackerSummary } from "../../dashboard/summary.schema";
+import AppShell from "../../layouts/AppShell.astro";
+import type { AccountDTO, CategoryDTO, TransactionDTO } from "../../modules/expense-tracker/types";
+
+const title = "Expense Tracker – App";
+const description = "Track accounts, categories, and transactions.";
+
+const [accountsResult, categoriesResult, transactionsResult, summary] = await Promise.all([
+  Astro.callAction(actions.listAccounts, { includeArchived: false }),
+  Astro.callAction(actions.listCategories, { includeArchived: false }),
+  Astro.callAction(actions.listTransactions, { page: 1, pageSize: 200 }),
+  buildExpenseTrackerSummary(Astro.locals.user?.id ?? ""),
+]);
+
+const accounts = (((accountsResult as any)?.data ?? accountsResult as any)?.items ?? []) as AccountDTO[];
+const categories = (((categoriesResult as any)?.data ?? categoriesResult as any)?.items ?? []) as CategoryDTO[];
+const transactions = ((((transactionsResult as any)?.data ?? transactionsResult as any)?.items ?? []) as TransactionDTO[])
+  .sort((a, b) => {
+    const aTime = new Date(a.transactionDate ?? a.createdAt ?? 0).getTime();
+    const bTime = new Date(b.transactionDate ?? b.createdAt ?? 0).getTime();
+    return bTime - aTime;
+  });
+
+---
+
+<AppShell title={title} description={description}>
+  <section class="av-faq-public__crumb">
+    <AvContainer>
+      <AvBreadcrumb
+        items={[
+          { label: "Home", href: "/" },
+          { label: "Expense Tracker" },
+        ]}
+      />
+    </AvContainer>
+  </section>
+
+  <section
+    class="av-section"
+    x-data="{ typeLabel: { expense: 'Expense', income: 'Income', transfer: 'Transfer' } }"
+  >
+    <AvContainer>
+      <div
+        class="av-auth-stack-lg"
+        x-data="$store.expenseTracker"
+        x-init={`init(${JSON.stringify({ accounts, categories, transactions })})`}
+        @expense-drawer-open.window="if ($event.detail?.key) { $store.appDrawer.open($event.detail.key) }"
+        @expense-drawer-close.window="$store.appDrawer.close()"
+      >
+        <AvCard className="av-auth-stack-md">
+          <div class="av-row-between app-row-top">
+            <div>
+              <p class="av-kicker">Expense Tracker</p>
+              <h1 class="av-section-title">Your financial entries</h1>
+              <p class="av-text-soft">Track core income and expenses with simple, predictable CRUD flows.</p>
+            </div>
+            <AvButton type="button" @click="openCreateTransaction">Create transaction</AvButton>
+          </div>
+          <template x-if="success">
+            <p class="av-text-soft" x-text="success"></p>
+          </template>
+          <template x-if="error">
+            <p class="app-form-error" x-text="error"></p>
+          </template>
+        </AvCard>
+
+        <div class="app-summary-grid">
+          <AvCard variant="soft">
+            <p class="av-text-soft">Total income</p>
+            <h2 class="av-section-title">{summary.totalIncome.toFixed(2)}</h2>
+          </AvCard>
+          <AvCard variant="soft">
+            <p class="av-text-soft">Total expense</p>
+            <h2 class="av-section-title">{summary.totalExpense.toFixed(2)}</h2>
+          </AvCard>
+          <AvCard variant="soft">
+            <p class="av-text-soft">Current balance</p>
+            <h2 class="av-section-title">{summary.balance.toFixed(2)}</h2>
+          </AvCard>
+        </div>
+
+        <AvCard variant="soft" className="av-auth-stack-md">
+          <div class="av-row-between app-row-top">
+            <h2 class="av-card-heading">Accounts</h2>
+            <p class="av-text-soft"><span x-text="accounts.length"></span> total</p>
+          </div>
+
+          <div class="app-inline-grid">
+            <label class="app-field">
+              <span class="app-label">Name</span>
+              <input class="app-input" type="text" x-model="accountForm.name" maxlength="120" />
+            </label>
+            <label class="app-field">
+              <span class="app-label">Type</span>
+              <input class="app-input" type="text" x-model="accountForm.type" maxlength="60" placeholder="cash / bank / card" />
+            </label>
+            <label class="app-field">
+              <span class="app-label">Currency</span>
+              <input class="app-input" type="text" x-model="accountForm.currency" maxlength="10" />
+            </label>
+            <label class="app-field">
+              <span class="app-label">Starting balance</span>
+              <input class="app-input" type="number" step="0.01" x-model="accountForm.startingBalance" />
+            </label>
+          </div>
+          <div>
+            <AvButton type="button" @click="createAccount" :disabled="loading">Create account</AvButton>
+          </div>
+
+          <template x-if="accounts.length > 0">
+            <div class="av-auth-stack-xs">
+              <template x-for="account in accounts" :key="account.id">
+                <div class="av-card av-card-soft">
+                  <p class="av-card-heading" x-text="account.name"></p>
+                  <p class="av-text-soft">
+                    <span x-text="account.type || 'Type not set'"></span>
+                    · <span x-text="account.currency || 'Currency not set'"></span>
+                  </p>
+                </div>
+              </template>
+            </div>
+          </template>
+        </AvCard>
+
+        <AvCard variant="soft" className="av-auth-stack-md">
+          <div class="av-row-between app-row-top">
+            <h2 class="av-card-heading">Categories</h2>
+            <p class="av-text-soft"><span x-text="categories.length"></span> total</p>
+          </div>
+
+          <div class="app-inline-grid app-inline-grid-categories">
+            <label class="app-field">
+              <span class="app-label">Name</span>
+              <input class="app-input" type="text" x-model="categoryForm.name" maxlength="120" />
+            </label>
+            <label class="app-field">
+              <span class="app-label">Kind</span>
+              <select class="app-input" x-model="categoryForm.type">
+                <option value="expense">Expense</option>
+                <option value="income">Income</option>
+                <option value="transfer">Transfer</option>
+              </select>
+            </label>
+          </div>
+          <div>
+            <AvButton type="button" @click="createCategory" :disabled="loading">Create category</AvButton>
+          </div>
+
+          <template x-if="categories.length > 0">
+            <div class="av-auth-stack-xs">
+              <template x-for="category in categories" :key="category.id">
+                <div class="av-card av-card-soft">
+                  <p class="av-card-heading" x-text="category.name"></p>
+                  <p class="av-text-soft" x-text="typeLabel[category.type] || category.type || 'Unspecified'"></p>
+                </div>
+              </template>
+            </div>
+          </template>
+        </AvCard>
+
+        <AvCard variant="soft" className="av-auth-stack-md">
+          <div class="av-row-between app-row-top">
+            <h2 class="av-card-heading">Transactions</h2>
+            <p class="av-text-soft"><span x-text="transactions.length"></span> total</p>
+          </div>
+
+          <template x-if="transactions.length === 0">
+            <AvEmptyState
+              title="No transactions yet"
+              description="Create your first transaction to start tracking totals."
+            />
+          </template>
+
+          <template x-if="transactions.length > 0">
+            <div class="av-auth-stack-sm">
+              <template x-for="transaction in transactions" :key="transaction.id">
+                <div class="av-card av-card-soft av-auth-stack-xs">
+                  <div class="av-row-between app-row-top">
+                    <div>
+                      <h3 class="av-card-heading" x-text="`${Number(transaction.amount).toFixed(2)}`"></h3>
+                      <p class="av-text-soft">
+                        <span x-text="transaction.description || 'No description'"></span>
+                        · <span x-text="(String(transaction.transactionDate || '')).slice(0, 10)"></span>
+                      </p>
+                    </div>
+                    <span class="av-badge av-badge-soft" x-text="typeLabel[transaction.type] || transaction.type"></span>
+                  </div>
+
+                  <div class="app-meta-grid">
+                    <label class="app-inline-field">
+                      <span class="av-text-soft">Type</span>
+                      <select
+                        class="app-input"
+                        :value="transaction.type"
+                        @change="quickUpdateType(transaction.id, $event.target.value)"
+                        :disabled="loading"
+                      >
+                        <option value="expense">Expense</option>
+                        <option value="income">Income</option>
+                        <option value="transfer">Transfer</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div class="av-row-wrap">
+                    <AvButton type="button" variant="ghost" @click="openEditTransaction(transaction)" :disabled="loading">Edit</AvButton>
+                    <AvButton type="button" variant="ghost" @click="deleteTransaction(transaction.id)" :disabled="loading">Delete</AvButton>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </template>
+        </AvCard>
+
+        <template x-if="$store.appDrawer.activeDrawer === 'createTransaction'">
+          <TransactionDrawer title="Create transaction" description="Add a new income or expense entry.">
+            <div class="app-form-grid">
+              <label class="app-field">
+                <span class="app-label">Account</span>
+                <select class="app-input" x-model="transactionForm.accountId">
+                  <option value="">Select account</option>
+                  <template x-for="account in accounts" :key="account.id">
+                    <option :value="account.id" x-text="account.name"></option>
+                  </template>
+                </select>
+              </label>
+              <label class="app-field">
+                <span class="app-label">Category</span>
+                <select class="app-input" x-model="transactionForm.categoryId">
+                  <option value="">Select category</option>
+                  <template x-for="category in categories" :key="category.id">
+                    <option :value="category.id" x-text="category.name"></option>
+                  </template>
+                </select>
+              </label>
+              <label class="app-field">
+                <span class="app-label">Type</span>
+                <select class="app-input" x-model="transactionForm.type">
+                  <option value="expense">Expense</option>
+                  <option value="income">Income</option>
+                  <option value="transfer">Transfer</option>
+                </select>
+              </label>
+              <label class="app-field">
+                <span class="app-label">Amount</span>
+                <input class="app-input" type="number" step="0.01" x-model="transactionForm.amount" />
+              </label>
+              <label class="app-field">
+                <span class="app-label">Currency</span>
+                <input class="app-input" type="text" x-model="transactionForm.currency" maxlength="10" />
+              </label>
+              <label class="app-field">
+                <span class="app-label">Date</span>
+                <input class="app-input" type="date" x-model="transactionForm.transactionDate" />
+              </label>
+              <label class="app-field app-field-wide">
+                <span class="app-label">Description</span>
+                <textarea class="app-input" x-model="transactionForm.description" rows="3" maxlength="500"></textarea>
+              </label>
+            </div>
+            <div slot="notice">
+              <p class="app-form-error" x-show="error" x-text="error"></p>
+            </div>
+            <div slot="actions" class="av-row-wrap av-drawer-footer-actions">
+              <AvButton variant="ghost" type="button" @click="$store.appDrawer.close()" :disabled="loading">Cancel</AvButton>
+              <AvButton type="button" @click="submitCreateTransaction" :disabled="loading">
+                <span x-show="!loading">Create transaction</span>
+                <span x-show="loading">Saving...</span>
+              </AvButton>
+            </div>
+          </TransactionDrawer>
+        </template>
+
+        <template x-if="$store.appDrawer.activeDrawer === 'editTransaction'">
+          <TransactionDrawer title="Edit transaction" description="Update an existing transaction entry.">
+            <div class="app-form-grid">
+              <label class="app-field">
+                <span class="app-label">Account</span>
+                <select class="app-input" x-model="transactionForm.accountId">
+                  <option value="">Select account</option>
+                  <template x-for="account in accounts" :key="account.id">
+                    <option :value="account.id" x-text="account.name"></option>
+                  </template>
+                </select>
+              </label>
+              <label class="app-field">
+                <span class="app-label">Category</span>
+                <select class="app-input" x-model="transactionForm.categoryId">
+                  <option value="">Select category</option>
+                  <template x-for="category in categories" :key="category.id">
+                    <option :value="category.id" x-text="category.name"></option>
+                  </template>
+                </select>
+              </label>
+              <label class="app-field">
+                <span class="app-label">Type</span>
+                <select class="app-input" x-model="transactionForm.type">
+                  <option value="expense">Expense</option>
+                  <option value="income">Income</option>
+                  <option value="transfer">Transfer</option>
+                </select>
+              </label>
+              <label class="app-field">
+                <span class="app-label">Amount</span>
+                <input class="app-input" type="number" step="0.01" x-model="transactionForm.amount" />
+              </label>
+              <label class="app-field">
+                <span class="app-label">Currency</span>
+                <input class="app-input" type="text" x-model="transactionForm.currency" maxlength="10" />
+              </label>
+              <label class="app-field">
+                <span class="app-label">Date</span>
+                <input class="app-input" type="date" x-model="transactionForm.transactionDate" />
+              </label>
+              <label class="app-field app-field-wide">
+                <span class="app-label">Description</span>
+                <textarea class="app-input" x-model="transactionForm.description" rows="3" maxlength="500"></textarea>
+              </label>
+            </div>
+            <div slot="notice">
+              <p class="app-form-error" x-show="error" x-text="error"></p>
+            </div>
+            <div slot="actions" class="av-row-wrap av-drawer-footer-actions">
+              <AvButton variant="ghost" type="button" @click="$store.appDrawer.close()" :disabled="loading">Cancel</AvButton>
+              <AvButton type="button" @click="submitUpdateTransaction" :disabled="loading">
+                <span x-show="!loading">Save changes</span>
+                <span x-show="loading">Saving...</span>
+              </AvButton>
+            </div>
+          </TransactionDrawer>
+        </template>
+      </div>
+    </AvContainer>
+  </section>
+</AppShell>
+
+<style>
+  .app-row-top {
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .app-summary-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+
+  .app-inline-grid {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  }
+
+  .app-inline-grid-categories {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+
+  .app-form-grid {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+
+  .app-field {
+    display: grid;
+    gap: 0.4rem;
+  }
+
+  .app-field-wide {
+    grid-column: 1 / -1;
+  }
+
+  .app-label {
+    color: #cbd5e1;
+    font-size: 0.9rem;
+  }
+
+  .app-input {
+    width: 100%;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    background: rgba(15, 23, 42, 0.45);
+    color: #e2e8f0;
+    padding: 0.6rem 0.75rem;
+  }
+
+  .app-input:focus {
+    outline: 2px solid rgba(59, 130, 246, 0.5);
+    outline-offset: 1px;
+  }
+
+  .app-form-error {
+    color: #fecaca;
+    font-size: 0.9rem;
+  }
+
+  .app-meta-grid {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .app-inline-field {
+    display: grid;
+    gap: 0.35rem;
+    max-width: 220px;
+  }
+
+  .drawer-body-scroll {
+    max-height: min(70vh, 640px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 0.25rem;
+  }
+
+  .drawer-footer-notice {
+    min-height: 1.25rem;
+  }
+
+  @media (max-width: 640px) {
+    .app-row-top {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .app-inline-field {
+      max-width: none;
+    }
+
+    .drawer-body-scroll {
+      max-height: 62vh;
+    }
+  }
+</style>

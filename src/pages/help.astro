@@ -1,0 +1,38 @@
+---
+import { AvBreadcrumb, AvCard, AvContainer } from "@ansiversa/components";
+import AppShell from "../layouts/AppShell.astro";
+
+const title = "Help – Expense Tracker";
+const description = "How to use Expense Tracker core flows.";
+---
+
+<AppShell title={title} description={description}>
+  <section class="av-faq-public__crumb">
+    <AvContainer>
+      <AvBreadcrumb items={[{ label: "Home", href: "/" }, { label: "Help" }]} />
+    </AvContainer>
+  </section>
+
+  <section class="av-section">
+    <AvContainer>
+      <div class="av-auth-stack-lg">
+        <AvCard className="av-auth-stack-md">
+          <div>
+            <p class="av-kicker">Expense Tracker</p>
+            <h1 class="av-section-title">Help</h1>
+            <p class="av-text-soft">Use accounts and categories first, then add transactions from the main app page.</p>
+          </div>
+        </AvCard>
+
+        <AvCard variant="soft" className="av-auth-stack-md">
+          <div class="av-auth-stack-xs">
+            <h2 class="av-card-heading">Slice 1 flow</h2>
+            <p class="av-text-soft">1. Create at least one account.</p>
+            <p class="av-text-soft">2. Create income/expense categories.</p>
+            <p class="av-text-soft">3. Create, edit, and delete transactions.</p>
+          </div>
+        </AvCard>
+      </div>
+    </AvContainer>
+  </section>
+</AppShell>
