@@ -26,5 +26,6 @@ MANDATORY: After completing each task, update this repo’s AGENTS.md Task Log (
 
 ## Task Log (Recent)
 - Keep newest first; include date and short summary.
+- 2026-03-08 Slice 1 completion from existing baseline: reused existing middleware/session boundary, DB tables (`Accounts`, `Categories`, `Transactions`), and action handlers; added missing user app route (`/app/expense-tracker`) with summary cards, account/category create flows, transaction list/edit/delete, and drawer-based create/edit transaction UX via Alpine stores. Added summary contract baseline (`src/dashboard/summary.schema.ts`) and verification checklist (`docs/verification/expense-tracker-slice-1-checklist.md`), then validated with repo commands (`npm run typecheck`, `npm run build`).
 - 2026-02-09 Added repo-level AGENTS.md enforcement contract (workspace reference + mandatory task-log update rule).
 - 2026-02-09 Initialized repo AGENTS baseline for single-repo Codex/AI safety.
