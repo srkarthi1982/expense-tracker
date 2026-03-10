@@ -60,6 +60,13 @@ const formatMonthKey = (value: string | Date | undefined) => {
 };
 
 type PeriodPreset = "all-time" | "this-month" | "last-month" | "this-year" | "last-30-days";
+type InsightTone = "info" | "watch" | "positive";
+
+type FinancialInsight = {
+  id: string;
+  tone: InsightTone;
+  text: string;
+};
 
 const getSafeTransactionDate = (transaction: TransactionDTO) => {
   const rawDate = transaction.transactionDate ?? transaction.createdAt;
@@ -305,6 +312,133 @@ export class ExpenseTrackerStore extends AvBaseStore {
       rightLabel: "Expense",
       rightValue: this.filteredSummary.expense,
     };
+  }
+
+  get periodExpenseMonthComparison() {
+    const points = this.monthlyTrendItems;
+    if (points.length < 2) return null;
+
+    const previous = points[points.length - 2];
+    const current = points[points.length - 1];
+    const difference = current.value - previous.value;
+
+    return {
+      current,
+      previous,
+      difference,
+    };
+  }
+
+  get smartInsights(): FinancialInsight[] {
+    const insights: FinancialInsight[] = [];
+    const summary = this.filteredSummary;
+    const topCategory = this.filteredTopExpenseCategory;
+    const comparison = this.periodExpenseMonthComparison;
+
+    if (topCategory) {
+      insights.push({
+        id: "top-category",
+        tone: "info",
+        text: `Your top expense category this period is ${topCategory.categoryName}.`,
+      });
+    }
+
+    if (summary.expense > 0 || summary.income > 0) {
+      if (summary.balance < 0) {
+        insights.push({
+          id: "balance-watch",
+          tone: "watch",
+          text: "Expenses exceeded income in this period.",
+        });
+      } else {
+        insights.push({
+          id: "balance-positive",
+          tone: "positive",
+          text: "You stayed cash-positive in this period.",
+        });
+      }
+    }
+
+    if (topCategory && summary.expense > 0) {
+      const share = topCategory.total / summary.expense;
+      insights.push({
+        id: "spend-concentration",
+        tone: share >= 0.55 ? "watch" : "info",
+        text:
+          share >= 0.55
+            ? `${topCategory.categoryName} accounts for ${Math.round(share * 100)}% of this period's spending, which is highly concentrated.`
+            : "Your spending is more evenly distributed across categories this period.",
+      });
+    }
+
+    if (this.filteredLargestRecentExpenses.length > 0) {
+      const [first, second] = this.filteredLargestRecentExpenses;
+      const firstAmount = Number(first.amount || 0);
+      const secondAmount = Number(second?.amount || 0);
+
+      if (firstAmount > 0 && secondAmount >= firstAmount * 0.7) {
+        insights.push({
+          id: "recent-high-expense-two",
+          tone: "watch",
+          text: "Recent spending is being driven by two high-value purchases.",
+        });
+      } else {
+        insights.push({
+          id: "recent-high-expense-one",
+          tone: "info",
+          text: `Your largest recent expense was ${first.description || "an uncategorized purchase"}.`,
+        });
+      }
+    }
+
+    if (comparison) {
+      if (comparison.difference > 0) {
+        insights.push({
+          id: "month-over-month-up",
+          tone: "watch",
+          text: `Expenses increased compared to ${comparison.previous.label}.`,
+        });
+      } else if (comparison.difference < 0) {
+        insights.push({
+          id: "month-over-month-down",
+          tone: "positive",
+          text: `Expenses decreased compared to ${comparison.previous.label}.`,
+        });
+      } else {
+        insights.push({
+          id: "month-over-month-flat",
+          tone: "info",
+          text: `Expenses were flat compared to ${comparison.previous.label}.`,
+        });
+      }
+    }
+
+    return insights.slice(0, 5);
+  }
+
+  get quickInsightTake() {
+    if (this.filteredTransactions.length === 0) {
+      return "Add transactions to unlock smart insights.";
+    }
+
+    if (this.filteredSummary.balance < 0) {
+      return "This period is expense-heavy.";
+    }
+
+    const comparison = this.periodExpenseMonthComparison;
+    if (comparison && comparison.difference < 0) {
+      return "Spending is trending down versus the previous month.";
+    }
+
+    const topCategory = this.filteredTopExpenseCategory;
+    if (topCategory && this.filteredSummary.expense > 0) {
+      const share = topCategory.total / this.filteredSummary.expense;
+      if (share >= 0.55) {
+        return "One category is dominating your spending.";
+      }
+    }
+
+    return "Your finances look stable this period.";
   }
 
   get totalExpense() {
