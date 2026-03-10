@@ -67,7 +67,7 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
               <h1 class="av-section-title">Your financial entries</h1>
               <p class="av-text-soft">Track income and expenses with period-aware insights while keeping your CRUD workflow simple.</p>
             </div>
-            <AvButton type="button" @click="openCreateTransaction">Create transaction</AvButton>
+            <AvButton type="button" @click="openCreateTransaction()">Create transaction</AvButton>
           </div>
           <template x-if="success">
             <p class="av-text-soft" x-text="success"></p>
@@ -96,6 +96,24 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
             <p class="av-text-soft">Synced {summary.updatedAt.slice(0, 10)}</p>
           </AvCard>
         </div>
+
+
+
+        <AvCard variant="soft" className="av-auth-stack-md">
+          <div class="av-row-between app-row-top">
+            <div>
+              <p class="av-kicker">Quick actions</p>
+              <h2 class="av-card-heading">Record something now</h2>
+            </div>
+          </div>
+
+          <div class="app-quick-actions">
+            <AvButton type="button" @click="openQuickAdd('expense')">Add expense</AvButton>
+            <AvButton type="button" variant="ghost" @click="openQuickAdd('income')">Add income</AvButton>
+            <AvButton type="button" variant="ghost" @click="repeatLastTransaction('expense')" :disabled="!lastExpenseTransaction">Repeat last expense</AvButton>
+            <AvButton type="button" variant="ghost" @click="repeatLastTransaction('income')" :disabled="!lastIncomeTransaction">Repeat last income</AvButton>
+          </div>
+        </AvCard>
 
         <AvCard variant="soft">
           <ComparisonStatChart
@@ -207,6 +225,39 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
                   <p class="app-smart-insight__tone" x-text="insight.tone"></p>
                   <p x-text="insight.text"></p>
                 </article>
+              </template>
+            </div>
+          </template>
+        </AvCard>
+
+
+
+        <AvCard variant="soft" className="av-auth-stack-md">
+          <div class="av-row-between app-row-top">
+            <h2 class="av-card-heading">Recent reusable transactions</h2>
+            <p class="av-text-soft">Top <span x-text="recentReusableTransactions.length"></span> quick repeats</p>
+          </div>
+
+          <template x-if="recentReusableTransactions.length === 0">
+            <AvEmptyState
+              title="No reusable transactions yet"
+              description="As you add entries, quick repeat actions will appear here."
+            />
+          </template>
+
+          <template x-if="recentReusableTransactions.length > 0">
+            <div class="av-auth-stack-xs">
+              <template x-for="transaction in recentReusableTransactions" :key="`reuse-${transaction.id}`">
+                <div class="av-card av-card-soft av-row-between app-row-top">
+                  <div>
+                    <p class="av-card-heading" x-text="`${Number(transaction.amount).toFixed(2)}`"></p>
+                    <p class="av-text-soft">
+                      <span x-text="transaction.description || 'No description'"></span>
+                      · <span x-text="(String(transaction.transactionDate || '')).slice(0, 10)"></span>
+                    </p>
+                  </div>
+                  <AvButton type="button" variant="ghost" @click="reuseTransaction(transaction)">Use again</AvButton>
+                </div>
               </template>
             </div>
           </template>
@@ -365,6 +416,9 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
 
         <template x-if="$store.appDrawer.activeDrawer === 'createTransaction'">
           <TransactionDrawer title="Create transaction" description="Add a new income or expense entry.">
+            <template x-if="quickEntryLabel">
+              <p class="av-text-soft">Flow: <span x-text="quickEntryLabel"></span></p>
+            </template>
             <div class="app-form-grid">
               <label class="app-field">
                 <span class="app-label">Account</span>
@@ -384,6 +438,23 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
                   </template>
                 </select>
               </label>
+
+              <template x-if="quickEntryType && quickEntryCommonCategories.length > 0">
+                <div class="app-field app-field-wide">
+                  <span class="app-label">Common categories</span>
+                  <div class="app-common-categories">
+                    <template x-for="category in quickEntryCommonCategories" :key="`quick-cat-${category.id}`">
+                      <AvButton
+                        type="button"
+                        variant="ghost"
+                        @click="setQuickCategory(category.id)"
+                      >
+                        <span x-text="category.name"></span>
+                      </AvButton>
+                    </template>
+                  </div>
+                </div>
+              </template>
               <label class="app-field">
                 <span class="app-label">Type</span>
                 <select class="app-input" x-model="transactionForm.type">
@@ -499,6 +570,12 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
 
 
 
+  .app-quick-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+  }
+
   .app-period-presets {
     display: flex;
     flex-wrap: wrap;
@@ -593,6 +670,12 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
   .app-form-error {
     color: #fecaca;
     font-size: 0.9rem;
+  }
+
+  .app-common-categories {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
   }
 
   .app-meta-grid {
