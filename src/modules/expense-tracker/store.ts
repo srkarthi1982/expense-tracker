@@ -261,6 +261,52 @@ export class ExpenseTrackerStore extends AvBaseStore {
       .slice(0, 3);
   }
 
+  get categoryChartItems() {
+    return this.filteredExpenseByCategory.map((item) => ({
+      label: item.categoryName,
+      value: item.total,
+      meta: `${item.count} transactions`,
+    }));
+  }
+
+  get monthlyTrendItems() {
+    const grouped = new Map<string, number>();
+
+    this.filteredTransactions
+      .filter((transaction) => transaction.type === "expense")
+      .forEach((transaction) => {
+        const safeDate = getSafeTransactionDate(transaction);
+        const key = formatMonthKey(safeDate);
+        const current = grouped.get(key) ?? 0;
+        grouped.set(key, current + Number(transaction.amount || 0));
+      });
+
+    return [...grouped.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([key, value]) => {
+        const labelDate = new Date(`${key}-01T00:00:00`);
+        const label = labelDate.toLocaleDateString("en-US", {
+          month: "short",
+          year: "2-digit",
+        });
+
+        return {
+          label,
+          value,
+        };
+      })
+      .slice(-8);
+  }
+
+  get incomeVsExpenseComparison() {
+    return {
+      leftLabel: "Income",
+      leftValue: this.filteredSummary.income,
+      rightLabel: "Expense",
+      rightValue: this.filteredSummary.expense,
+    };
+  }
+
   get totalExpense() {
     return this.transactions
       .filter((transaction) => transaction.type === "expense")

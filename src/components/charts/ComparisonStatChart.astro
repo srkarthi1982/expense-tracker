@@ -1,0 +1,69 @@
+---
+interface ComparisonStatChartProps {
+  title: string;
+  leftLabel: string;
+  leftValueExpression: string;
+  rightLabel: string;
+  rightValueExpression: string;
+  subtitle?: string;
+  emptyText?: string;
+}
+
+const {
+  title,
+  leftLabel,
+  leftValueExpression,
+  rightLabel,
+  rightValueExpression,
+  subtitle,
+  emptyText = "No comparison data available.",
+} = Astro.props as ComparisonStatChartProps;
+
+const totalExpression = `(Number(${leftValueExpression}) + Number(${rightValueExpression}))`;
+const leftWidthStyleExpression = `\`width: \${segmentWidth(${leftValueExpression}, ${totalExpression})}%\``;
+const rightWidthStyleExpression = `\`width: \${segmentWidth(${rightValueExpression}, ${totalExpression})}%\``;
+const hasDataExpression = `(Number(${leftValueExpression}) > 0 || Number(${rightValueExpression}) > 0)`;
+---
+
+<section class="compare-stack-sm" x-data="{ segmentWidth(value, total) { if (!total) return 50; return Math.max(10, Math.round((Number(value || 0) / total) * 100)); } }">
+  <div class="compare-stack-xxs">
+    <h3 class="av-card-heading">{title}</h3>
+    {subtitle && <p class="av-text-soft">{subtitle}</p>}
+  </div>
+
+  <template x-if={"!(" + hasDataExpression + ")"}>
+    <p class="av-text-soft">{emptyText}</p>
+  </template>
+
+  <template x-if={hasDataExpression}>
+    <div class="compare-stack-xs">
+      <div class="compare-values">
+        <div>
+          <p class="compare-label">{leftLabel}</p>
+          <p class="compare-number" x-text={`Number(${leftValueExpression}).toFixed(2)`}></p>
+        </div>
+        <div>
+          <p class="compare-label">{rightLabel}</p>
+          <p class="compare-number" x-text={`Number(${rightValueExpression}).toFixed(2)`}></p>
+        </div>
+      </div>
+      <div class="compare-track" role="img" aria-label={title}>
+        <span class="compare-segment compare-segment-left" :style={leftWidthStyleExpression}></span>
+        <span class="compare-segment compare-segment-right" :style={rightWidthStyleExpression}></span>
+      </div>
+    </div>
+  </template>
+</section>
+
+<style>
+  .compare-stack-sm { display: grid; gap: 0.8rem; }
+  .compare-stack-xs { display: grid; gap: 0.7rem; }
+  .compare-stack-xxs { display: grid; gap: 0.35rem; }
+  .compare-values { display: grid; gap: 0.7rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .compare-label { margin: 0; font-size: 0.76rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em; }
+  .compare-number { margin: 0.25rem 0 0; color: #f8fafc; font-size: 1.05rem; font-weight: 600; }
+  .compare-track { display: flex; width: 100%; height: 0.62rem; border-radius: 999px; overflow: hidden; background: rgba(148, 163, 184, 0.2); }
+  .compare-segment { display: block; height: 100%; }
+  .compare-segment-left { background: linear-gradient(90deg, #22d3ee 0%, #3b82f6 100%); }
+  .compare-segment-right { background: linear-gradient(90deg, #f472b6 0%, #f97316 100%); }
+</style>
