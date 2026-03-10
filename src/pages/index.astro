@@ -1,93 +1,244 @@
 ---
+import { AvButton, AvCard, AvContainer, AvEmptyState } from "@ansiversa/components";
+import { actions } from "astro:actions";
+import { buildExpenseTrackerSummary } from "../dashboard/summary.schema";
 import AppShell from "../layouts/AppShell.astro";
-import { AvContainer, AvButton } from "@ansiversa/components";
+import type { CategoryDTO, TransactionDTO } from "../modules/expense-tracker/types";
 
 const title = "Expense Tracker – Ansiversa";
-const description = "Track spending by category.";
+const description = "Track income and expenses with a clean daily overview.";
+
+const [categoriesResult, transactionsResult, summary] = await Promise.all([
+  Astro.callAction(actions.listCategories, { includeArchived: false }),
+  Astro.callAction(actions.listTransactions, { page: 1, pageSize: 100 }),
+  buildExpenseTrackerSummary(Astro.locals.user?.id ?? ""),
+]);
+
+const categories = (((categoriesResult as any)?.data ?? categoriesResult as any)?.items ?? []) as CategoryDTO[];
+const transactions = ((((transactionsResult as any)?.data ?? transactionsResult as any)?.items ?? []) as TransactionDTO[])
+  .sort((a, b) => {
+    const aTime = new Date(a.transactionDate ?? a.createdAt ?? 0).getTime();
+    const bTime = new Date(b.transactionDate ?? b.createdAt ?? 0).getTime();
+    return bTime - aTime;
+  });
+
+const recentTransactions = transactions.slice(0, 5);
+
+const categoryById = new Map(categories.map((category) => [category.id, category.name]));
+
+const expenseByCategory = transactions
+  .filter((transaction) => transaction.type === "expense" && transaction.categoryId)
+  .reduce((acc, transaction) => {
+    const categoryId = transaction.categoryId as string;
+    const amount = Number(transaction.amount ?? 0);
+    acc.set(categoryId, (acc.get(categoryId) ?? 0) + amount);
+    return acc;
+  }, new Map<string, number>());
+
+let topExpenseCategory = "No expense data yet";
+let topExpenseAmount = 0;
+
+for (const [categoryId, amount] of expenseByCategory.entries()) {
+  if (amount > topExpenseAmount) {
+    topExpenseAmount = amount;
+    topExpenseCategory = categoryById.get(categoryId) ?? "Uncategorized";
+  }
+}
+
+const latestTransaction = recentTransactions[0];
+
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+  }).format(value);
 ---
 
 <AppShell title={title} description={description}>
-  <!-- Hero -->
-  <section class="av-hero">
-    <AvContainer size="narrow" className="av-hero__content--narrow">
-      <div class="av-hero__content">
-        <div class="av-kicker">
-          <span>Lifestyle & Personal · Ansiversa Mini App</span>
+  <section class="av-section">
+    <AvContainer>
+      <div class="home-hero-grid">
+        <div class="av-auth-stack-md">
+          <p class="av-kicker">Lifestyle & Personal · Ansiversa Mini App</p>
+          <h1 class="av-gradient-text">Expense Tracker</h1>
+          <p class="av-text-soft">
+            A calm place to track spending and income daily without spreadsheet clutter.
+          </p>
+          <ul class="home-bullets">
+            <li>See income, expenses, and balance in seconds.</li>
+            <li>Organize every entry with clean account and category context.</li>
+            <li>Keep your money picture useful for daily decisions.</li>
+          </ul>
+          <div class="av-row-wrap">
+            <AvButton href="/app/expense-tracker">View transactions</AvButton>
+            <AvButton href="/help" variant="ghost">Help</AvButton>
+          </div>
         </div>
-        <h1 class="av-gradient-text">Expense Tracker</h1>
-        <p>
-          Track spending by category.
-        </p>
-      </div>
-      <div class="av-cta-row">
-        <AvButton href="https://expense-tracker.ansiversa.com">Launch Expense</AvButton>
+
+        <AvCard className="av-auth-stack-md" variant="soft">
+          <p class="av-kicker">Today at a glance</p>
+          <div class="home-panel-grid">
+            <div>
+              <p class="av-text-soft">Total income</p>
+              <p class="home-number">{formatCurrency(summary.totalIncome)}</p>
+            </div>
+            <div>
+              <p class="av-text-soft">Total expense</p>
+              <p class="home-number">{formatCurrency(summary.totalExpense)}</p>
+            </div>
+            <div>
+              <p class="av-text-soft">Current balance</p>
+              <p class="home-number">{formatCurrency(summary.balance)}</p>
+            </div>
+            <div>
+              <p class="av-text-soft">Transactions</p>
+              <p class="home-number">{summary.recentTransactionCount}</p>
+            </div>
+          </div>
+          <div class="home-callouts av-auth-stack-xs">
+            <p class="av-text-soft">Top expense category: <strong>{topExpenseCategory}</strong></p>
+            <p class="av-text-soft">
+              Latest activity:
+              <strong>
+                {latestTransaction
+                  ? `${latestTransaction.type} · ${formatCurrency(Number(latestTransaction.amount ?? 0))}`
+                  : "No transactions yet"}
+              </strong>
+            </p>
+          </div>
+        </AvCard>
       </div>
     </AvContainer>
   </section>
 
-  <!-- Problem -->
   <section class="av-section">
-    <AvContainer size="narrow">
-      <div class="av-section-header">
-        <h2 class="av-section-title">The problem it solves</h2>
-        <p class="av-section-lead">
-          Personal goals, habits, and routines are easy to start and hard to maintain.
-        </p>
-      </div>
-      <div class="av-section-body space-y-3 text-slate-300">
-        <p>Expense Tracker keeps this one area of your life simple, trackable, and encouraging.</p>
+    <AvContainer>
+      <div class="home-summary-strip">
+        <AvCard variant="soft">
+          <p class="av-text-soft">Total income</p>
+          <h2 class="av-section-title">{formatCurrency(summary.totalIncome)}</h2>
+        </AvCard>
+        <AvCard variant="soft">
+          <p class="av-text-soft">Total expense</p>
+          <h2 class="av-section-title">{formatCurrency(summary.totalExpense)}</h2>
+        </AvCard>
+        <AvCard variant="soft">
+          <p class="av-text-soft">Current balance</p>
+          <h2 class="av-section-title">{formatCurrency(summary.balance)}</h2>
+        </AvCard>
+        <AvCard variant="soft">
+          <p class="av-text-soft">Transactions</p>
+          <h2 class="av-section-title">{summary.recentTransactionCount}</h2>
+        </AvCard>
       </div>
     </AvContainer>
   </section>
 
-  <!-- Why this mini app -->
   <section class="av-section">
     <AvContainer size="narrow">
       <div class="av-section-header">
-        <h2 class="av-section-title">Why Expense Tracker feels different</h2>
-        <p class="av-section-lead">
-          A focused mini app inside the larger Ansiversa ecosystem.
-        </p>
+        <h2 class="av-section-title">What makes Expense Tracker different</h2>
       </div>
-      <div class="av-section-body">
-        <ul class="space-y-2 text-slate-300 list-disc list-inside">
-          <li>Designed for real daily life, not perfect theory.</li>
-          <li>Helps you see progress in small, manageable steps.</li>
-          <li>Works alongside other Ansiversa tools that support your day.</li>
-        </ul>
+      <div class="home-pillars">
+        <AvCard variant="soft">
+          <h3 class="av-card-heading">Category-first tracking</h3>
+          <p class="av-text-soft">Log every expense or income entry in a way that stays easy to review later.</p>
+        </AvCard>
+        <AvCard variant="soft">
+          <h3 class="av-card-heading">Clear balance visibility</h3>
+          <p class="av-text-soft">Know where you stand with always-on totals for income, expenses, and balance.</p>
+        </AvCard>
+        <AvCard variant="soft">
+          <h3 class="av-card-heading">Fast daily logging</h3>
+          <p class="av-text-soft">Add entries quickly so tracking stays lightweight and realistic for daily life.</p>
+        </AvCard>
       </div>
     </AvContainer>
   </section>
 
-  <!-- How it works -->
   <section class="av-section">
-    <AvContainer size="narrow">
-      <div class="av-section-header">
-        <h2 class="av-section-title">How it works</h2>
-        <p class="av-section-lead">
-          Simple, clear steps so people can start in under a minute.
-        </p>
+    <AvContainer>
+      <div class="av-row-between app-row-top">
+        <div>
+          <h2 class="av-section-title">Recent transactions</h2>
+          <p class="av-text-soft">Your latest money activity in one compact list.</p>
+        </div>
+        <AvButton href="/app/expense-tracker" variant="ghost">Open full tracker</AvButton>
       </div>
-      <ol class="av-section-body space-y-2 text-slate-300 list-decimal list-inside">
-        <li>Open Expense Tracker at the start or end of your day.</li>
-        <li>Add or update your latest actions, plans, or reflections.</li>
-        <li>Review your progress and adjust your next small step.</li>
-      </ol>
-    </AvContainer>
-  </section>
 
-  <!-- Final CTA -->
-  <section class="av-section">
-    <AvContainer size="narrow">
-      <div class="av-section-header">
-        <h2 class="av-section-title">Ready to try Expense Tracker?</h2>
-        <p class="av-section-lead">
-          Open the app, follow the simple flow, and let it handle the heavy lifting.
-        </p>
-      </div>
-      <div class="av-cta-row">
-        <AvButton href="https://expense-tracker.ansiversa.com">Start with Expense</AvButton>
-      </div>
+      {recentTransactions.length === 0 ? (
+        <AvCard variant="soft">
+          <AvEmptyState
+            title="No transactions yet"
+            description="Add your first transaction to start building your summary."
+          />
+          <div class="home-empty-cta">
+            <AvButton href="/app/expense-tracker">Create first transaction</AvButton>
+          </div>
+        </AvCard>
+      ) : (
+        <div class="home-recent-list av-auth-stack-sm">
+          {recentTransactions.map((transaction) => (
+            <AvCard variant="soft" className="av-row-between app-row-top">
+              <div>
+                <p class="av-card-heading">{formatCurrency(Number(transaction.amount ?? 0))}</p>
+                <p class="av-text-soft">
+                  {categoryById.get(transaction.categoryId ?? "") ?? "Uncategorized"} · {(String(transaction.transactionDate || "")).slice(0, 10)}
+                </p>
+              </div>
+              <span class="av-badge av-badge-soft">{transaction.type}</span>
+            </AvCard>
+          ))}
+        </div>
+      )}
     </AvContainer>
   </section>
 </AppShell>
+
+<style>
+  .home-hero-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    align-items: start;
+  }
+
+  .home-bullets {
+    color: #cbd5e1;
+    list-style: disc;
+    padding-left: 1.1rem;
+    display: grid;
+    gap: 0.35rem;
+  }
+
+  .home-panel-grid,
+  .home-summary-strip,
+  .home-pillars {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  }
+
+  .home-number {
+    font-size: 1.15rem;
+    font-weight: 600;
+  }
+
+  .home-callouts strong {
+    color: #f8fafc;
+  }
+
+  .app-row-top {
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .home-recent-list :global(.av-card) {
+    width: 100%;
+  }
+
+  .home-empty-cta {
+    margin-top: 0.75rem;
+  }
+</style>

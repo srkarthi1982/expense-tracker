@@ -77,15 +77,20 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
         <div class="app-summary-grid">
           <AvCard variant="soft">
             <p class="av-text-soft">Total income</p>
-            <h2 class="av-section-title">{summary.totalIncome.toFixed(2)}</h2>
+            <h2 class="av-section-title" x-text="totalIncome.toFixed(2)"></h2>
           </AvCard>
           <AvCard variant="soft">
             <p class="av-text-soft">Total expense</p>
-            <h2 class="av-section-title">{summary.totalExpense.toFixed(2)}</h2>
+            <h2 class="av-section-title" x-text="totalExpense.toFixed(2)"></h2>
           </AvCard>
           <AvCard variant="soft">
             <p class="av-text-soft">Current balance</p>
-            <h2 class="av-section-title">{summary.balance.toFixed(2)}</h2>
+            <h2 class="av-section-title" x-text="balance.toFixed(2)"></h2>
+          </AvCard>
+          <AvCard variant="soft">
+            <p class="av-text-soft">Transactions</p>
+            <h2 class="av-section-title" x-text="transactions.length"></h2>
+            <p class="av-text-soft">Synced {summary.updatedAt.slice(0, 10)}</p>
           </AvCard>
         </div>
 
