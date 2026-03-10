@@ -1,0 +1,49 @@
+---
+interface MiniTrendChartProps {
+  title: string;
+  pointsExpression: string;
+  subtitle?: string;
+  emptyText?: string;
+}
+
+const {
+  title,
+  pointsExpression,
+  subtitle,
+  emptyText = "No trend data available for this period.",
+} = Astro.props as MiniTrendChartProps;
+
+const maxExpression = `((${pointsExpression}).reduce((max, point) => Math.max(max, Number(point.value || 0)), 0) || 1)`;
+const barStyleExpression = `\`height: \${heightPercent(point.value, ${maxExpression})}%\``;
+---
+
+<section class="trend-stack-sm" x-data="{ heightPercent(value, max) { if (!max) return 0; return Math.max(8, Math.round((Number(value || 0) / max) * 100)); } }">
+  <div class="trend-stack-xxs">
+    <h3 class="av-card-heading">{title}</h3>
+    {subtitle && <p class="av-text-soft">{subtitle}</p>}
+  </div>
+
+  <template x-if={`${pointsExpression}.length === 0`}>
+    <p class="av-text-soft">{emptyText}</p>
+  </template>
+
+  <template x-if={`${pointsExpression}.length > 0`}>
+    <div class="trend-bars" role="img" aria-label={title}>
+      <template x-for={`point in ${pointsExpression}`} :key="point.label">
+        <div class="trend-bar-column">
+          <span class="trend-bar" :style={barStyleExpression}></span>
+          <p class="trend-axis-label" x-text="point.label"></p>
+        </div>
+      </template>
+    </div>
+  </template>
+</section>
+
+<style>
+  .trend-stack-sm { display: grid; gap: 0.8rem; }
+  .trend-stack-xxs { display: grid; gap: 0.35rem; }
+  .trend-bars { display: grid; grid-template-columns: repeat(auto-fit, minmax(48px, 1fr)); align-items: end; gap: 0.55rem; min-height: 132px; border-radius: 0.9rem; border: 1px solid rgba(148, 163, 184, 0.26); padding: 0.75rem; background: rgba(15, 23, 42, 0.5); }
+  .trend-bar-column { display: grid; gap: 0.45rem; align-items: end; justify-items: center; min-height: 100%; }
+  .trend-bar { width: 100%; max-width: 1.5rem; border-radius: 0.55rem; min-height: 0.5rem; background: linear-gradient(180deg, #22d3ee 0%, #3b82f6 100%); }
+  .trend-axis-label { margin: 0; font-size: 0.74rem; color: #94a3b8; text-align: center; }
+</style>

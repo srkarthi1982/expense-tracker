@@ -7,6 +7,9 @@ import {
   AvEmptyState,
 } from "@ansiversa/components";
 import { actions } from "astro:actions";
+import BarListChart from "../../components/charts/BarListChart.astro";
+import ComparisonStatChart from "../../components/charts/ComparisonStatChart.astro";
+import MiniTrendChart from "../../components/charts/MiniTrendChart.astro";
 import TransactionDrawer from "../../components/drawers/TransactionDrawer.astro";
 import { buildExpenseTrackerSummary } from "../../dashboard/summary.schema";
 import AppShell from "../../layouts/AppShell.astro";
@@ -94,6 +97,18 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
           </AvCard>
         </div>
 
+        <AvCard variant="soft">
+          <ComparisonStatChart
+            title="Income vs expense"
+            subtitle="Period-aware comparison based on current filters"
+            leftLabel="Income"
+            leftValueExpression="incomeVsExpenseComparison.leftValue"
+            rightLabel="Expense"
+            rightValueExpression="incomeVsExpenseComparison.rightValue"
+            emptyText="No income or expense values available for this period."
+          />
+        </AvCard>
+
         <AvCard variant="soft" className="av-auth-stack-md">
           <div class="av-row-between app-row-top">
             <h2 class="av-card-heading">Period filters</h2>
@@ -140,27 +155,21 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
                 </p>
               </template>
             </div>
-
-            <template x-if="filteredExpenseByCategory.length === 0">
-              <p class="av-text-soft">No categorized expenses in this period.</p>
-            </template>
-
-            <template x-if="filteredExpenseByCategory.length > 0">
-              <div class="av-auth-stack-xs">
-                <template x-for="item in filteredExpenseByCategory" :key="item.categoryName">
-                  <div class="av-card av-card-soft app-insight-row">
-                    <p class="av-card-heading" x-text="item.categoryName"></p>
-                    <p class="av-text-soft">
-                      <span x-text="item.total.toFixed(2)"></span>
-                      · <span x-text="`${item.count} transactions`"></span>
-                    </p>
-                  </div>
-                </template>
-              </div>
-            </template>
+            <BarListChart
+              title="Category spending"
+              subtitle="Descending totals for expense categories"
+              itemsExpression="categoryChartItems"
+              emptyText="No categorized expenses in this period."
+            />
           </AvCard>
 
           <AvCard variant="soft" className="av-auth-stack-md">
+            <MiniTrendChart
+              title="Monthly expense trend"
+              subtitle="Recent monthly expense totals in selected period"
+              pointsExpression="monthlyTrendItems"
+              emptyText="No monthly expense trend yet for the selected period."
+            />
             <h2 class="av-card-heading">Largest recent expenses in period</h2>
             <template x-if="filteredLargestRecentExpenses.length === 0">
               <p class="av-text-soft">No recent expenses in this period.</p>
@@ -477,13 +486,6 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
     display: grid;
     gap: 1rem;
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  }
-
-  .app-insight-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
   }
 
   .app-month-heading {

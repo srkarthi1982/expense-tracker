@@ -1,0 +1,63 @@
+---
+interface BarListChartProps {
+  title: string;
+  itemsExpression: string;
+  subtitle?: string;
+  maxValueExpression?: string;
+  emptyText?: string;
+}
+
+const {
+  title,
+  itemsExpression,
+  subtitle,
+  maxValueExpression,
+  emptyText = "No chart data available.",
+} = Astro.props as BarListChartProps;
+
+const resolvedMaxExpression = maxValueExpression
+  ?? `((${itemsExpression}).reduce((max, item) => Math.max(max, Number(item.value || 0)), 0) || 1)`;
+const barStyleExpression = `\`width: \${widthPercent(item.value, ${resolvedMaxExpression})}%\``;
+---
+
+<section class="chart-card chart-stack-sm" x-data="{ widthPercent(value, max) { if (!max) return 0; return Math.max(4, Math.round((Number(value || 0) / max) * 100)); } }">
+  <div class="chart-stack-xxs">
+    <h3 class="av-card-heading">{title}</h3>
+    {subtitle && <p class="av-text-soft">{subtitle}</p>}
+  </div>
+
+  <template x-if={`${itemsExpression}.length === 0`}>
+    <p class="av-text-soft">{emptyText}</p>
+  </template>
+
+  <template x-if={`${itemsExpression}.length > 0`}>
+    <div class="chart-stack-xs">
+      <template x-for={`item in ${itemsExpression}`} :key="item.label">
+        <div class="chart-stack-xxs">
+          <div class="chart-row">
+            <p class="chart-label" x-text="item.label"></p>
+            <p class="chart-value">
+              <span x-text="Number(item.value || 0).toFixed(2)"></span>
+              <span class="av-text-soft" x-show="item.meta" x-text="item.meta"></span>
+            </p>
+          </div>
+          <div class="chart-bar-track">
+            <span class="chart-bar-fill" :style={barStyleExpression}></span>
+          </div>
+        </div>
+      </template>
+    </div>
+  </template>
+</section>
+
+<style>
+  .chart-card { display: grid; }
+  .chart-stack-sm { gap: 0.8rem; }
+  .chart-stack-xs { display: grid; gap: 0.6rem; }
+  .chart-stack-xxs { display: grid; gap: 0.35rem; }
+  .chart-row { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+  .chart-label { color: #e2e8f0; margin: 0; font-size: 0.92rem; }
+  .chart-value { margin: 0; display: flex; align-items: baseline; gap: 0.4rem; color: #f8fafc; font-size: 0.85rem; }
+  .chart-bar-track { width: 100%; height: 0.45rem; border-radius: 999px; background: rgba(148, 163, 184, 0.2); overflow: hidden; }
+  .chart-bar-fill { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #38bdf8 0%, #6366f1 100%); }
+</style>
