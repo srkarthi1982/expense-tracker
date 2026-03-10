@@ -191,6 +191,28 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
         </div>
 
         <AvCard variant="soft" className="av-auth-stack-md">
+          <div class="av-auth-stack-xs">
+            <p class="av-kicker">Smart insights</p>
+            <h2 class="av-card-heading">Quick take: <span x-text="quickInsightTake"></span></h2>
+          </div>
+
+          <template x-if="smartInsights.length === 0">
+            <p class="av-text-soft">Add more transactions to unlock richer spending insights.</p>
+          </template>
+
+          <template x-if="smartInsights.length > 0">
+            <div class="av-auth-stack-xs">
+              <template x-for="insight in smartInsights" :key="insight.id">
+                <article class="app-smart-insight" :class="`app-smart-insight--${insight.tone}`">
+                  <p class="app-smart-insight__tone" x-text="insight.tone"></p>
+                  <p x-text="insight.text"></p>
+                </article>
+              </template>
+            </div>
+          </template>
+        </AvCard>
+
+        <AvCard variant="soft" className="av-auth-stack-md">
           <div class="av-row-between app-row-top">
             <h2 class="av-card-heading">Accounts</h2>
             <p class="av-text-soft"><span x-text="accounts.length"></span> total</p>
@@ -486,6 +508,35 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
     display: grid;
     gap: 1rem;
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+
+  .app-smart-insight {
+    border-radius: 0.9rem;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    padding: 0.85rem 0.95rem;
+    background: rgba(15, 23, 42, 0.45);
+  }
+
+  .app-smart-insight__tone {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.72rem;
+    margin-bottom: 0.4rem;
+    color: #cbd5e1;
+  }
+
+  .app-smart-insight--info {
+    border-color: rgba(59, 130, 246, 0.45);
+  }
+
+  .app-smart-insight--watch {
+    border-color: rgba(248, 113, 113, 0.5);
+    background: rgba(127, 29, 29, 0.22);
+  }
+
+  .app-smart-insight--positive {
+    border-color: rgba(74, 222, 128, 0.5);
+    background: rgba(20, 83, 45, 0.2);
   }
 
   .app-month-heading {
