@@ -59,6 +59,26 @@ const formatMonthKey = (value: string | Date | undefined) => {
   return `${year}-${month}`;
 };
 
+type PeriodPreset = "all-time" | "this-month" | "last-month" | "this-year" | "last-30-days";
+
+const getSafeTransactionDate = (transaction: TransactionDTO) => {
+  const rawDate = transaction.transactionDate ?? transaction.createdAt;
+  const parsed = rawDate ? new Date(rawDate) : new Date();
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+};
+
+const startOfDay = (date: Date) => {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+};
+
+const endOfDay = (date: Date) => {
+  const next = new Date(date);
+  next.setHours(23, 59, 59, 999);
+  return next;
+};
+
 export class ExpenseTrackerStore extends AvBaseStore {
   accounts: AccountDTO[] = [];
   categories: CategoryDTO[] = [];
@@ -72,6 +92,12 @@ export class ExpenseTrackerStore extends AvBaseStore {
   loading = false;
   error: string | null = null;
   success: string | null = null;
+  selectedPeriodPreset: PeriodPreset = "all-time";
+  customStartDate = "";
+  customEndDate = "";
+  customAppliedStartDate = "";
+  customAppliedEndDate = "";
+  dateFilterError: string | null = null;
 
   init(initial?: {
     accounts?: AccountDTO[];
@@ -87,6 +113,152 @@ export class ExpenseTrackerStore extends AvBaseStore {
     return this.transactions
       .filter((transaction) => transaction.type === "income")
       .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+  }
+
+  get periodLabel() {
+    if (this.customAppliedStartDate && this.customAppliedEndDate) {
+      return `${this.customAppliedStartDate} to ${this.customAppliedEndDate}`;
+    }
+
+    const labels: Record<PeriodPreset, string> = {
+      "all-time": "All time",
+      "this-month": "This month",
+      "last-month": "Last month",
+      "this-year": "This year",
+      "last-30-days": "Last 30 days",
+    };
+
+    return labels[this.selectedPeriodPreset];
+  }
+
+  get activeDateRange() {
+    if (this.customAppliedStartDate && this.customAppliedEndDate) {
+      const start = new Date(this.customAppliedStartDate);
+      const end = new Date(this.customAppliedEndDate);
+
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+        return null;
+      }
+
+      return {
+        start: startOfDay(start),
+        end: endOfDay(end),
+      };
+    }
+
+    const now = new Date();
+    if (this.selectedPeriodPreset === "all-time") return null;
+
+    if (this.selectedPeriodPreset === "this-month") {
+      return {
+        start: new Date(now.getFullYear(), now.getMonth(), 1),
+        end: endOfDay(new Date(now)),
+      };
+    }
+
+    if (this.selectedPeriodPreset === "last-month") {
+      return {
+        start: new Date(now.getFullYear(), now.getMonth() - 1, 1),
+        end: endOfDay(new Date(now.getFullYear(), now.getMonth(), 0)),
+      };
+    }
+
+    if (this.selectedPeriodPreset === "this-year") {
+      return {
+        start: new Date(now.getFullYear(), 0, 1),
+        end: endOfDay(new Date(now)),
+      };
+    }
+
+    return {
+      start: startOfDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29)),
+      end: endOfDay(now),
+    };
+  }
+
+  get filteredTransactions() {
+    const range = this.activeDateRange;
+    if (!range) return this.sortedTransactions;
+
+    return this.sortedTransactions.filter((transaction) => {
+      const date = getSafeTransactionDate(transaction);
+      return date >= range.start && date <= range.end;
+    });
+  }
+
+  get filteredSummary() {
+    const income = this.filteredTransactions
+      .filter((transaction) => transaction.type === "income")
+      .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+
+    const expense = this.filteredTransactions
+      .filter((transaction) => transaction.type === "expense")
+      .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+
+    return {
+      income,
+      expense,
+      balance: income - expense,
+      count: this.filteredTransactions.length,
+    };
+  }
+
+  get filteredExpenseByCategory() {
+    const categoryMap = new Map(this.categories.map((category) => [category.id, category.name]));
+    const grouped = new Map<string, { categoryName: string; total: number; count: number }>();
+
+    this.filteredTransactions
+      .filter((transaction) => transaction.type === "expense")
+      .forEach((transaction) => {
+        const key = transaction.categoryId || "uncategorized";
+        const current = grouped.get(key) ?? {
+          categoryName: categoryMap.get(transaction.categoryId || "") || "Uncategorized",
+          total: 0,
+          count: 0,
+        };
+
+        current.total += Number(transaction.amount || 0);
+        current.count += 1;
+        grouped.set(key, current);
+      });
+
+    return [...grouped.values()].sort((a, b) => b.total - a.total);
+  }
+
+  get filteredTopExpenseCategory() {
+    return this.filteredExpenseByCategory[0] ?? null;
+  }
+
+  get filteredMonthlyTransactionGroups() {
+    const groups = new Map<string, { label: string; transactions: TransactionDTO[]; sortValue: number }>();
+
+    this.filteredTransactions.forEach((transaction) => {
+      const safeDate = getSafeTransactionDate(transaction);
+      const key = formatMonthKey(safeDate);
+      const label = safeDate.toLocaleDateString("en-US", {
+        month: "long",
+        year: "numeric",
+      });
+
+      const existing = groups.get(key) ?? {
+        label,
+        transactions: [],
+        sortValue: new Date(`${key}-01T00:00:00`).getTime(),
+      };
+
+      existing.transactions.push(transaction);
+      groups.set(key, existing);
+    });
+
+    return [...groups.values()].sort((a, b) => b.sortValue - a.sortValue);
+  }
+
+  get filteredLargestRecentExpenses() {
+    return this.filteredTransactions
+      .filter((transaction) => transaction.type === "expense")
+      .slice(0, 20)
+      .sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0))
+      .slice(0, 3);
   }
 
   get totalExpense() {
@@ -183,6 +355,43 @@ export class ExpenseTrackerStore extends AvBaseStore {
       .slice(0, 20)
       .sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0))
       .slice(0, 3);
+  }
+
+  setPeriodPreset(period: PeriodPreset) {
+    this.selectedPeriodPreset = period;
+    this.customStartDate = "";
+    this.customEndDate = "";
+    this.customAppliedStartDate = "";
+    this.customAppliedEndDate = "";
+    this.dateFilterError = null;
+  }
+
+  applyCustomDateRange() {
+    this.dateFilterError = null;
+
+    if (!this.customStartDate || !this.customEndDate) {
+      this.dateFilterError = "Please select both a start date and end date.";
+      return;
+    }
+
+    const start = new Date(this.customStartDate);
+    const end = new Date(this.customEndDate);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      this.dateFilterError = "Please enter valid dates for the selected range.";
+      return;
+    }
+
+    if (start > end) {
+      this.dateFilterError = "Start date must be before or equal to end date.";
+      return;
+    }
+
+    this.customAppliedStartDate = this.customStartDate;
+    this.customAppliedEndDate = this.customEndDate;
+  }
+
+  clearDateFilters() {
+    this.setPeriodPreset("all-time");
   }
 
   private unwrapResult<T = any>(result: any): T {
