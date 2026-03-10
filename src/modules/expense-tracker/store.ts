@@ -68,6 +68,18 @@ type FinancialInsight = {
   text: string;
 };
 
+type QuickEntryType = "expense" | "income";
+
+type TransactionPreset = Partial<{
+  accountId: string;
+  categoryId: string;
+  type: EntryType;
+  amount: string;
+  currency: string;
+  transactionDate: string;
+  description: string;
+}>;
+
 const getSafeTransactionDate = (transaction: TransactionDTO) => {
   const rawDate = transaction.transactionDate ?? transaction.createdAt;
   const parsed = rawDate ? new Date(rawDate) : new Date();
@@ -105,6 +117,8 @@ export class ExpenseTrackerStore extends AvBaseStore {
   customAppliedStartDate = "";
   customAppliedEndDate = "";
   dateFilterError: string | null = null;
+  quickEntryType: QuickEntryType | null = null;
+  quickEntryLabel: string | null = null;
 
   init(initial?: {
     accounts?: AccountDTO[];
@@ -537,6 +551,63 @@ export class ExpenseTrackerStore extends AvBaseStore {
       .slice(0, 3);
   }
 
+  get lastExpenseTransaction() {
+    return this.sortedTransactions.find((transaction) => transaction.type === "expense") ?? null;
+  }
+
+  get lastIncomeTransaction() {
+    return this.sortedTransactions.find((transaction) => transaction.type === "income") ?? null;
+  }
+
+  get recentReusableTransactions() {
+    return this.sortedTransactions
+      .filter((transaction) => transaction.type === "expense" || transaction.type === "income")
+      .slice(0, 5);
+  }
+
+  private lastUsedCategoryIdByType(type: QuickEntryType) {
+    const match = this.sortedTransactions.find((transaction) =>
+      transaction.type === type && Boolean(transaction.categoryId)
+    );
+    return match?.categoryId ?? "";
+  }
+
+  private commonCategoryIdsByType(type: QuickEntryType) {
+    const counts = new Map<string, number>();
+
+    this.sortedTransactions
+      .filter((transaction) => transaction.type === type && Boolean(transaction.categoryId))
+      .slice(0, 30)
+      .forEach((transaction) => {
+        const key = transaction.categoryId || "";
+        if (!key) return;
+        const current = counts.get(key) ?? 0;
+        counts.set(key, current + 1);
+      });
+
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+      .map(([categoryId]) => categoryId);
+  }
+
+  get quickEntryCommonCategories() {
+    if (!this.quickEntryType) return [];
+
+    const preferredIds = this.commonCategoryIdsByType(this.quickEntryType);
+    return preferredIds
+      .map((categoryId) => this.categories.find((category) => category.id === categoryId))
+      .filter((category): category is CategoryDTO => Boolean(category));
+  }
+
+  private applyTransactionPreset(preset?: TransactionPreset) {
+    this.transactionForm = {
+      ...defaultTransactionForm(),
+      ...preset,
+      transactionDate: preset?.transactionDate || new Date().toISOString().slice(0, 10),
+    };
+  }
+
   setPeriodPreset(period: PeriodPreset) {
     this.selectedPeriodPreset = period;
     this.customStartDate = "";
@@ -618,15 +689,69 @@ export class ExpenseTrackerStore extends AvBaseStore {
     return null;
   }
 
-  openCreateTransaction() {
+  openCreateTransaction(preset?: TransactionPreset, options?: { quickEntryType?: QuickEntryType; label?: string }) {
     this.editingTransactionId = null;
-    this.transactionForm = defaultTransactionForm();
+    this.quickEntryType = options?.quickEntryType ?? null;
+    this.quickEntryLabel = options?.label ?? null;
+    this.applyTransactionPreset(preset);
     this.resetMessages();
     this.emitDrawerEvent("expense-drawer-open", { key: "createTransaction" });
   }
 
+  openQuickAdd(type: QuickEntryType) {
+    const lastUsedCategoryId = this.lastUsedCategoryIdByType(type);
+    this.openCreateTransaction(
+      {
+        type,
+        categoryId: lastUsedCategoryId,
+      },
+      { quickEntryType: type, label: `Quick add ${type}` },
+    );
+  }
+
+  repeatLastTransaction(type: QuickEntryType) {
+    const source = type === "expense" ? this.lastExpenseTransaction : this.lastIncomeTransaction;
+    if (!source) return;
+
+    this.openCreateTransaction(
+      {
+        accountId: source.accountId ?? "",
+        categoryId: source.categoryId ?? "",
+        type,
+        amount: String(source.amount ?? ""),
+        currency: source.currency ?? "",
+        transactionDate: new Date().toISOString().slice(0, 10),
+        description: source.description ?? "",
+      },
+      { quickEntryType: type, label: `Repeat last ${type}` },
+    );
+  }
+
+  reuseTransaction(transaction: TransactionDTO) {
+    const quickEntryType = transaction.type === "income" ? "income" : "expense";
+
+    this.openCreateTransaction(
+      {
+        accountId: transaction.accountId ?? "",
+        categoryId: transaction.categoryId ?? "",
+        type: transaction.type,
+        amount: String(transaction.amount ?? ""),
+        currency: transaction.currency ?? "",
+        transactionDate: new Date().toISOString().slice(0, 10),
+        description: transaction.description ?? "",
+      },
+      { quickEntryType, label: "Reuse recent transaction" },
+    );
+  }
+
+  setQuickCategory(categoryId: string) {
+    this.transactionForm.categoryId = categoryId;
+  }
+
   openEditTransaction(transaction: TransactionDTO) {
     this.editingTransactionId = transaction.id;
+    this.quickEntryType = null;
+    this.quickEntryLabel = null;
     this.transactionForm = {
       accountId: transaction.accountId ?? "",
       categoryId: transaction.categoryId ?? "",
@@ -642,6 +767,8 @@ export class ExpenseTrackerStore extends AvBaseStore {
 
   closeDrawer() {
     this.editingTransactionId = null;
+    this.quickEntryType = null;
+    this.quickEntryLabel = null;
     this.transactionForm = defaultTransactionForm();
     this.emitDrawerEvent("expense-drawer-close");
   }
