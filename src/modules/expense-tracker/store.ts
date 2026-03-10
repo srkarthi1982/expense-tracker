@@ -44,6 +44,21 @@ const toDateOrNow = (value: string) => {
   return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
 };
 
+const getTransactionTime = (transaction: TransactionDTO) => {
+  const rawDate = transaction.transactionDate ?? transaction.createdAt ?? null;
+  if (!rawDate) return 0;
+  const parsed = new Date(rawDate).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+const formatMonthKey = (value: string | Date | undefined) => {
+  const parsed = value ? new Date(value) : new Date();
+  const normalized = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  const year = normalized.getFullYear();
+  const month = String(normalized.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+};
+
 export class ExpenseTrackerStore extends AvBaseStore {
   accounts: AccountDTO[] = [];
   categories: CategoryDTO[] = [];
@@ -82,6 +97,92 @@ export class ExpenseTrackerStore extends AvBaseStore {
 
   get balance() {
     return this.totalIncome - this.totalExpense;
+  }
+
+  get sortedTransactions() {
+    return [...this.transactions].sort((a, b) => getTransactionTime(b) - getTransactionTime(a));
+  }
+
+  get currentMonthSummary() {
+    const monthKey = formatMonthKey(new Date());
+    const monthTransactions = this.transactions.filter((transaction) =>
+      formatMonthKey(transaction.transactionDate ?? transaction.createdAt) === monthKey
+    );
+
+    const income = monthTransactions
+      .filter((transaction) => transaction.type === "income")
+      .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+
+    const expense = monthTransactions
+      .filter((transaction) => transaction.type === "expense")
+      .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+
+    return {
+      income,
+      expense,
+      balance: income - expense,
+      count: monthTransactions.length,
+    };
+  }
+
+  get expenseByCategory() {
+    const categoryMap = new Map(this.categories.map((category) => [category.id, category.name]));
+    const grouped = new Map<string, { categoryName: string; total: number; count: number }>();
+
+    this.transactions
+      .filter((transaction) => transaction.type === "expense")
+      .forEach((transaction) => {
+        const key = transaction.categoryId || "uncategorized";
+        const current = grouped.get(key) ?? {
+          categoryName: categoryMap.get(transaction.categoryId || "") || "Uncategorized",
+          total: 0,
+          count: 0,
+        };
+
+        current.total += Number(transaction.amount || 0);
+        current.count += 1;
+        grouped.set(key, current);
+      });
+
+    return [...grouped.values()].sort((a, b) => b.total - a.total);
+  }
+
+  get topExpenseCategory() {
+    return this.expenseByCategory[0] ?? null;
+  }
+
+  get monthlyTransactionGroups() {
+    const groups = new Map<string, { label: string; transactions: TransactionDTO[]; sortValue: number }>();
+
+    this.sortedTransactions.forEach((transaction) => {
+      const rawDate = transaction.transactionDate ?? transaction.createdAt;
+      const parsedDate = rawDate ? new Date(rawDate) : new Date();
+      const safeDate = Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
+      const key = formatMonthKey(safeDate);
+      const label = safeDate.toLocaleDateString("en-US", {
+        month: "long",
+        year: "numeric",
+      });
+
+      const existing = groups.get(key) ?? {
+        label,
+        transactions: [],
+        sortValue: new Date(`${key}-01T00:00:00`).getTime(),
+      };
+
+      existing.transactions.push(transaction);
+      groups.set(key, existing);
+    });
+
+    return [...groups.values()].sort((a, b) => b.sortValue - a.sortValue);
+  }
+
+  get largestRecentExpenses() {
+    return this.sortedTransactions
+      .filter((transaction) => transaction.type === "expense")
+      .slice(0, 20)
+      .sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0))
+      .slice(0, 3);
   }
 
   private unwrapResult<T = any>(result: any): T {
