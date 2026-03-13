@@ -7,12 +7,21 @@ import type { CategoryDTO, TransactionDTO } from "../modules/expense-tracker/typ
 
 const title = "Expense Tracker – Ansiversa";
 const description = "Track income and expenses with a clean daily overview.";
+const isAuthenticated = Astro.locals.isAuthenticated === true;
 
-const [categoriesResult, transactionsResult, summary] = await Promise.all([
-  Astro.callAction(actions.listCategories, { includeArchived: false }),
-  Astro.callAction(actions.listTransactions, { page: 1, pageSize: 100 }),
-  buildExpenseTrackerSummary(Astro.locals.user?.id ?? ""),
-]);
+const [categoriesResult, transactionsResult, summary] = await Promise.all(
+  isAuthenticated
+    ? [
+        Astro.callAction(actions.listCategories, { includeArchived: false }),
+        Astro.callAction(actions.listTransactions, { page: 1, pageSize: 100 }),
+        buildExpenseTrackerSummary(Astro.locals.user?.id ?? ""),
+      ]
+    : [
+        Promise.resolve({ data: { items: [] } }),
+        Promise.resolve({ data: { items: [] } }),
+        buildExpenseTrackerSummary(""),
+      ],
+);
 
 const categories = (((categoriesResult as any)?.data ?? categoriesResult as any)?.items ?? []) as CategoryDTO[];
 const transactions = ((((transactionsResult as any)?.data ?? transactionsResult as any)?.items ?? []) as TransactionDTO[])

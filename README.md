@@ -69,6 +69,18 @@ Start the development server:
 npm run dev
 ```
 
+`npm run dev` is pinned to `http://localhost:4321` with strict port mode.  
+If that port is already used by another app/process, the command will fail fast instead of silently switching to another port.
+
+Like `resume-builder`, the public landing page (`/`) and help page (`/help`) stay available locally without auth.
+Protected app routes still redirect to the parent login, and in DEV the fallback parent URL is `http://localhost:2000` unless `PUBLIC_ROOT_APP_URL` is set.
+
+If local auth is not available and requests are redirecting to the parent domain login, enable a DEV-only bypass in `.env`:
+
+```bash
+DEV_AUTH_BYPASS=true
+```
+
 Build for production:
 
 ```bash

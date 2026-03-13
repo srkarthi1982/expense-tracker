@@ -21,6 +21,9 @@ interface ImportMetaEnv {
 
   /** Optional: Override the root app URL (fallback: https://ansiversa.com) */
   readonly PUBLIC_ROOT_APP_URL?: string;
+
+  /** Optional: DEV-only auth bypass for local mini-app development */
+  readonly DEV_AUTH_BYPASS?: string;
 }
 
 interface Window {
@@ -45,4 +48,3 @@ declare namespace App {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
-

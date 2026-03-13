@@ -4,7 +4,7 @@
   "private": false,
   "type": "module",
   "scripts": {
-    "dev": "astro dev --remote",
+    "dev": "astro dev --remote --port 4321 --strictPort",
     "build": "astro build --remote",
     "typecheck": "astro check",
     "preview": "astro preview",
