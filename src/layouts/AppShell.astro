@@ -1,15 +1,159 @@
 ---
 import "@ansiversa/components/styles/global.css";
-import { WebLayout } from "@ansiversa/components";
+import {
+  AppLogo,
+  AvBrand,
+  AvFooter,
+  AvNavbar,
+  AvNavbarActions,
+} from "@ansiversa/components";
 
 interface Props {
   title?: string;
   description?: string;
 }
 
-const props = Astro.props;
+const {
+  title = "Ansiversa",
+  description = "Ansiversa – A unified ecosystem of premium Apps designed to feel simple, powerful, and delightful.",
+} = Astro.props as Props;
+
+const user = (Astro.locals as { user?: {
+  id: string;
+  email: string;
+  name?: string;
+  roleId?: number;
+} }).user;
+
+const miniAppLinks = [
+  { label: "Home", href: "/" },
+  { label: "Expense Tracker", href: "/app/expense-tracker" },
+  { label: "Help", href: "/help" },
+];
+
+const rawDomain = (
+  import.meta.env.PUBLIC_SITE_URL ||
+  import.meta.env.PUBLIC_ROOT_APP_URL ||
+  import.meta.env.PARENT_APP_URL ||
+  import.meta.env.ANSIVERSA_COOKIE_DOMAIN ||
+  "ansiversa.com"
+).trim();
+const normalizedDomain = rawDomain.replace(/^(https?:\/\/)/i, "").replace(/\/+$/, "");
+const protocol = rawDomain.match(/^https?:\/\//i)
+  ? undefined
+  : import.meta.env.PROD
+    ? "https"
+    : "http";
+const rootUrl = rawDomain.match(/^https?:\/\//i)
+  ? rawDomain.replace(/\/+$/, "")
+  : `${protocol}://${normalizedDomain}`;
+
+const buildParentUrl = (path: string) => new URL(path, `${rootUrl}/`).toString();
 ---
 
-<WebLayout {...props}>
-  <slot />
-</WebLayout>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="generator" content={Astro.generator} />
+
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" content="#020617" />
+    <meta name="color-scheme" content="dark" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:site_name" content="Ansiversa" />
+    <meta property="og:url" content={rootUrl} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <slot name="head" />
+  </head>
+
+  <body class="av-page av-theme-app">
+    <AvNavbar>
+      <AvBrand />
+      <AvNavbarActions user={user} notificationUnreadCount={0} />
+    </AvNavbar>
+
+    <div class="av-mini-app-bar">
+      <div class="av-mini-app-bar__inner">
+        <div class="av-mini-app-bar__title">
+          <a
+            href="/"
+            class="av-mini-app-bar__title-link"
+            title="Expense Tracker"
+            aria-label="Go to Expense Tracker home"
+          >
+            <span class="av-mini-app-bar__name flex items-center gap-2">
+              <AppLogo appId="expense-tracker" size="sm" />
+              <span class="truncate">Expense Tracker</span>
+            </span>
+          </a>
+        </div>
+
+        <div class="av-mini-app-bar__menu" x-data="{ open: false }">
+          <button
+            type="button"
+            class="av-mini-app-bar__menu-button"
+            aria-label="Open app menu"
+            aria-haspopup="menu"
+            x-on:click="open = !open"
+            x-bind:aria-expanded="open"
+          >
+            <svg
+              class="av-mini-app-bar__menu-icon"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="5" r="1.5" />
+              <circle cx="12" cy="12" r="1.5" />
+              <circle cx="12" cy="19" r="1.5" />
+            </svg>
+          </button>
+
+          <div
+            x-show="open"
+            x-cloak
+            x-transition.origin.top.right
+            x-on:click.outside="open = false"
+            class="av-user-menu av-mini-app-menu"
+            role="menu"
+            aria-label="Expense Tracker menu"
+          >
+            <div class="av-nav-user-menu">
+              {miniAppLinks.map((item) => (
+                <a href={item.href} class="av-dropdown-item" role="menuitem">
+                  <span>{item.label}</span>
+                </a>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <main class="av-main">
+      <slot />
+    </main>
+
+    <AvFooter
+      links={[
+        { label: "Terms", href: buildParentUrl("/terms") },
+        { label: "Privacy", href: buildParentUrl("/privacy") },
+        { label: "FAQ", href: buildParentUrl("/faq") },
+        { label: "Contact", href: buildParentUrl("/contact") },
+      ]}
+    />
+  </body>
+</html>
