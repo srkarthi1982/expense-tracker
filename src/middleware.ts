@@ -15,9 +15,26 @@ const ROOT_APP_URL =
   import.meta.env.PUBLIC_ROOT_APP_URL ??
   (import.meta.env.DEV ? "http://localhost:2000" : `https://${COOKIE_DOMAIN}`);
 
+const readEnvValue = (key: string) => {
+  const processValue = (globalThis as any).process?.env?.[key];
+  if (typeof processValue === "string" && processValue.trim()) {
+    return processValue.trim();
+  }
+
+  const metaValue = (import.meta.env as Record<string, unknown>)[key];
+  if (typeof metaValue === "string" && metaValue.trim()) {
+    return metaValue.trim();
+  }
+
+  return "";
+};
+
 const DEV_AUTH_BYPASS_ENABLED =
   import.meta.env.DEV &&
-  String(import.meta.env.DEV_AUTH_BYPASS ?? "").toLowerCase() === "true";
+  readEnvValue("DEV_AUTH_BYPASS").toLowerCase() === "true";
+const DEV_AUTH_BYPASS_USER_ID = readEnvValue("DEV_AUTH_BYPASS_USER_ID") || "local-dev-user";
+const DEV_AUTH_BYPASS_EMAIL = readEnvValue("DEV_AUTH_BYPASS_EMAIL") || "local-dev@ansiversa.local";
+const DEV_AUTH_BYPASS_NAME = readEnvValue("DEV_AUTH_BYPASS_NAME") || "Local Dev User";
 
 const isStaticPath = (pathname: string) => {
   if (STATIC_EXACT.has(pathname) || FAVICON_PNG_PATTERN.test(pathname)) return true;
@@ -65,9 +82,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
   if (!locals.isAuthenticated && DEV_AUTH_BYPASS_ENABLED) {
     // Local-only fallback to unblock mini-app development when shared auth is unavailable.
     locals.user = {
-      id: "local-dev-user",
-      email: "local-dev@ansiversa.local",
-      name: "Local Dev User",
+      id: DEV_AUTH_BYPASS_USER_ID,
+      email: DEV_AUTH_BYPASS_EMAIL,
+      name: DEV_AUTH_BYPASS_NAME,
     };
     locals.sessionToken = null;
     locals.isAuthenticated = true;

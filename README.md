@@ -79,6 +79,9 @@ If local auth is not available and requests are redirecting to the parent domain
 
 ```bash
 DEV_AUTH_BYPASS=true
+DEV_AUTH_BYPASS_USER_ID=01e5cef7-b18d-4616-999c-454175356c24
+DEV_AUTH_BYPASS_EMAIL=ansiversa-demo@local
+DEV_AUTH_BYPASS_NAME=Ansiversa Demo
 ```
 
 Build for production:

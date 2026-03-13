@@ -24,6 +24,15 @@ interface ImportMetaEnv {
 
   /** Optional: DEV-only auth bypass for local mini-app development */
   readonly DEV_AUTH_BYPASS?: string;
+
+  /** Optional: DEV-only override for bypass user id */
+  readonly DEV_AUTH_BYPASS_USER_ID?: string;
+
+  /** Optional: DEV-only override for bypass user email */
+  readonly DEV_AUTH_BYPASS_EMAIL?: string;
+
+  /** Optional: DEV-only override for bypass user name */
+  readonly DEV_AUTH_BYPASS_NAME?: string;
 }
 
 interface Window {

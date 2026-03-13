@@ -1,30 +1,37 @@
 ---
 import { AvButton, AvCard, AvContainer, AvEmptyState } from "@ansiversa/components";
-import { actions } from "astro:actions";
+import { db, eq, and, Categories, Transactions } from "astro:db";
 import { buildExpenseTrackerSummary } from "../dashboard/summary.schema";
 import AppShell from "../layouts/AppShell.astro";
 import type { CategoryDTO, TransactionDTO } from "../modules/expense-tracker/types";
 
+export const prerender = false;
+
 const title = "Expense Tracker – Ansiversa";
 const description = "Track income and expenses with a clean daily overview.";
-const isAuthenticated = Astro.locals.isAuthenticated === true;
+const devBypassUserId =
+  import.meta.env.DEV && String(import.meta.env.DEV_AUTH_BYPASS ?? "").toLowerCase() === "true"
+    ? String(import.meta.env.DEV_AUTH_BYPASS_USER_ID ?? "").trim()
+    : "";
+const userId = Astro.locals.user?.id ?? devBypassUserId;
+const hasUser = userId.length > 0;
 
 const [categoriesResult, transactionsResult, summary] = await Promise.all(
-  isAuthenticated
+  hasUser
     ? [
-        Astro.callAction(actions.listCategories, { includeArchived: false }),
-        Astro.callAction(actions.listTransactions, { page: 1, pageSize: 100 }),
-        buildExpenseTrackerSummary(Astro.locals.user?.id ?? ""),
+        db.select().from(Categories).where(and(eq(Categories.userId, userId), eq(Categories.isArchived, false))),
+        db.select().from(Transactions).where(eq(Transactions.userId, userId)),
+        buildExpenseTrackerSummary(userId),
       ]
     : [
-        Promise.resolve({ data: { items: [] } }),
-        Promise.resolve({ data: { items: [] } }),
+        Promise.resolve([]),
+        Promise.resolve([]),
         buildExpenseTrackerSummary(""),
       ],
 );
 
-const categories = (((categoriesResult as any)?.data ?? categoriesResult as any)?.items ?? []) as CategoryDTO[];
-const transactions = ((((transactionsResult as any)?.data ?? transactionsResult as any)?.items ?? []) as TransactionDTO[])
+const categories = (categoriesResult ?? []) as CategoryDTO[];
+const transactions = ((transactionsResult ?? []) as TransactionDTO[])
   .sort((a, b) => {
     const aTime = new Date(a.transactionDate ?? a.createdAt ?? 0).getTime();
     const bTime = new Date(b.transactionDate ?? b.createdAt ?? 0).getTime();
