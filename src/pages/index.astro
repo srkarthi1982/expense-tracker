@@ -70,7 +70,7 @@ const [accountsResult, categoriesResult, transactionsResult, summary] = await Pr
   hasUser
     ? [
         db.select().from(Accounts).where(and(eq(Accounts.userId, userId), eq(Accounts.isArchived, false))),
-        db.select().from(Categories).where(and(eq(Categories.userId, userId), eq(Categories.isArchived, false))),
+        db.select().from(Categories).where(eq(Categories.userId, userId)),
         db.select().from(Transactions).where(eq(Transactions.userId, userId)),
         buildExpenseTrackerSummary(userId),
       ]

@@ -22,7 +22,7 @@ const userId = Astro.locals.user?.id ?? "";
 
 const [allAccountsResult, categoriesResult, transactionsResult, summary] = await Promise.all([
   db.select().from(Accounts).where(eq(Accounts.userId, userId)),
-  Astro.callAction(actions.listCategories, { includeArchived: false }),
+  Astro.callAction(actions.listCategories, { includeArchived: true }),
   db.select().from(Transactions).where(eq(Transactions.userId, userId)),
   buildExpenseTrackerSummary(userId),
 ]);
@@ -73,6 +73,7 @@ const transactions = ((transactionsResult ?? []) as TransactionDTO[])
           </div>
           <p class="av-text-soft" x-text="currencyStatusMessage"></p>
           <p class="av-text-soft">Archived accounts stay part of historical totals, but remain hidden from normal account-management lists and selectors.</p>
+          <p class="av-text-soft">Archived categories stay part of historical reporting, but new transaction selectors only show active categories compatible with the selected transaction type.</p>
           <template x-if="success">
             <p class="av-text-soft" x-text="success"></p>
           </template>
@@ -320,7 +321,7 @@ const transactions = ((transactionsResult ?? []) as TransactionDTO[])
         <AvCard variant="soft" className="av-auth-stack-md">
           <div class="av-row-between app-row-top">
             <h2 class="av-card-heading">Categories</h2>
-            <p class="av-text-soft"><span x-text="categories.length"></span> total</p>
+            <p class="av-text-soft"><span x-text="visibleCategories.length"></span> active</p>
           </div>
 
           <div class="app-inline-grid app-inline-grid-categories">
@@ -341,9 +342,9 @@ const transactions = ((transactionsResult ?? []) as TransactionDTO[])
             <AvButton type="button" @click="createCategory" :disabled="loading">Create category</AvButton>
           </div>
 
-          <template x-if="categories.length > 0">
+          <template x-if="visibleCategories.length > 0">
             <div class="av-auth-stack-xs">
-              <template x-for="category in categories" :key="category.id">
+              <template x-for="category in visibleCategories" :key="category.id">
                 <div class="av-card av-card-soft">
                   <p class="av-card-heading" x-text="category.name"></p>
                   <p class="av-text-soft" x-text="typeLabel[category.type] || category.type || 'Unspecified'"></p>
@@ -447,8 +448,8 @@ const transactions = ((transactionsResult ?? []) as TransactionDTO[])
               <label class="app-field">
                 <span class="app-label">Category</span>
                 <select class="app-input" x-model="transactionForm.categoryId">
-                  <option value="">Select category</option>
-                  <template x-for="category in categories" :key="category.id">
+                  <option value="" x-text="transactionForm.type === 'transfer' ? 'No category for transfers' : 'Select category'"></option>
+                  <template x-for="category in transactionSelectableCategories" :key="category.id">
                     <option :value="category.id" x-text="category.name"></option>
                   </template>
                 </select>
@@ -535,8 +536,8 @@ const transactions = ((transactionsResult ?? []) as TransactionDTO[])
               <label class="app-field">
                 <span class="app-label">Category</span>
                 <select class="app-input" x-model="transactionForm.categoryId">
-                  <option value="">Select category</option>
-                  <template x-for="category in categories" :key="category.id">
+                  <option value="" x-text="transactionForm.type === 'transfer' ? 'No category for transfers' : 'Select category'"></option>
+                  <template x-for="category in transactionSelectableCategories" :key="category.id">
                     <option :value="category.id" x-text="category.name"></option>
                   </template>
                 </select>

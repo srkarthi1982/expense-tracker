@@ -137,6 +137,40 @@ export class ExpenseTrackerStore extends AvBaseStore {
     return this.accounts.filter((account) => !account.isArchived);
   }
 
+  get visibleCategories() {
+    return this.categories.filter((category) => !category.isArchived);
+  }
+
+  private categoriesForType(type: EntryType) {
+    if (type === "transfer") {
+      return [];
+    }
+
+    return this.visibleCategories.filter((category) => category.type === type);
+  }
+
+  get transactionSelectableCategories() {
+    const baseCategories = this.categoriesForType(this.transactionForm.type);
+    const selectedCategoryId = this.transactionForm.categoryId;
+
+    if (!selectedCategoryId) {
+      return baseCategories;
+    }
+
+    const selectedCategory = this.categories.find((category) => category.id === selectedCategoryId);
+    if (!selectedCategory) {
+      return baseCategories;
+    }
+
+    const shouldPreserveSelectedCategory =
+      selectedCategory.type === this.transactionForm.type
+      && !baseCategories.some((category) => category.id === selectedCategory.id);
+
+    return shouldPreserveSelectedCategory
+      ? [selectedCategory, ...baseCategories]
+      : baseCategories;
+  }
+
   get totalIncome() {
     return this.transactions
       .filter((transaction) => transaction.type === "income")
@@ -734,7 +768,9 @@ export class ExpenseTrackerStore extends AvBaseStore {
 
   private lastUsedCategoryIdByType(type: QuickEntryType) {
     const match = this.sortedTransactions.find((transaction) =>
-      transaction.type === type && Boolean(transaction.categoryId)
+      transaction.type === type
+      && Boolean(transaction.categoryId)
+      && this.visibleCategories.some((category) => category.id === transaction.categoryId)
     );
     return match?.categoryId ?? "";
   }
@@ -763,7 +799,7 @@ export class ExpenseTrackerStore extends AvBaseStore {
 
     const preferredIds = this.commonCategoryIdsByType(this.quickEntryType);
     return preferredIds
-      .map((categoryId) => this.categories.find((category) => category.id === categoryId))
+      .map((categoryId) => this.visibleCategories.find((category) => category.id === categoryId))
       .filter((category): category is CategoryDTO => Boolean(category));
   }
 
@@ -779,8 +815,18 @@ export class ExpenseTrackerStore extends AvBaseStore {
   setTransactionType(type: EntryType) {
     this.transactionForm.type = type;
 
-    if (type !== "transfer") {
-      this.transactionForm.transferAccountId = "";
+    if (type === "transfer") {
+      this.transactionForm.categoryId = "";
+      return;
+    }
+
+    this.transactionForm.transferAccountId = "";
+
+    const stillValidCategory = this.transactionSelectableCategories.some(
+      (category) => category.id === this.transactionForm.categoryId,
+    );
+    if (!stillValidCategory) {
+      this.transactionForm.categoryId = "";
     }
   }
 
@@ -943,7 +989,7 @@ export class ExpenseTrackerStore extends AvBaseStore {
     this.quickEntryLabel = null;
     this.transactionForm = {
       accountId: transaction.accountId ?? "",
-      categoryId: transaction.categoryId ?? "",
+      categoryId: transaction.type === "transfer" ? "" : transaction.categoryId ?? "",
       transferAccountId: transaction.transferAccountId ?? "",
       type: transaction.type,
       amount: String(transaction.amount ?? ""),
@@ -1130,6 +1176,12 @@ export class ExpenseTrackerStore extends AvBaseStore {
     const existing = this.transactions.find((transaction) => transaction.id === id);
     if (!existing || this.loading || existing.type === type) return;
 
+    const nextCategoryId = this.visibleCategories.some(
+      (category) => category.id === existing.categoryId && category.type === type,
+    )
+      ? existing.categoryId ?? undefined
+      : undefined;
+
     this.loading = true;
     this.resetMessages();
 
@@ -1137,7 +1189,7 @@ export class ExpenseTrackerStore extends AvBaseStore {
       const res = await actions.updateTransaction({
         id,
         accountId: existing.accountId ?? undefined,
-        categoryId: existing.categoryId ?? undefined,
+        categoryId: nextCategoryId,
         type,
         amount: Number(existing.amount),
         currency: existing.currency ?? (this.effectiveCurrencyCode || undefined),

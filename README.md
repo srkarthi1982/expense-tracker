@@ -16,6 +16,7 @@ Expense Tracker is an Ansiversa mini-app for logging personal income, expenses, 
 - `Current balance` means: starting balances + transaction effects.
 - `Net flow` means: income - expense for the selected period.
 - Archived accounts still count in historical totals and current balance, but are hidden from normal account-management UI.
+- Archived categories still count in historical transaction rendering and summaries, but are hidden from normal category-management and new-entry selectors.
 - Expense Tracker V1 is a single-currency app.
 - Trusted totals and insights require one currency across the user’s accounts and transactions.
 - Transaction-related records are validated server-side. Selected account, category, and transfer account must belong to the authenticated user.
@@ -47,6 +48,7 @@ Expense Tracker is an Ansiversa mini-app for logging personal income, expenses, 
 - Belong to the authenticated user.
 - Can reference `accountId`, `categoryId`, and `transferAccountId`.
 - `transfer` entries require both a source account and a destination account.
+- `transfer` entries do not use categories in V1.
 - Non-transfer entries must not send `transferAccountId`.
 
 ## User Flow

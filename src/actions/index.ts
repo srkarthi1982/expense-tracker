@@ -71,6 +71,34 @@ async function requireCategoryForUser(id: string, userId: string) {
   return category;
 }
 
+async function validateParentCategoryForUser(
+  userId: string,
+  parentCategoryId: string | undefined,
+  options?: { currentCategoryId?: string },
+) {
+  const normalizedParentCategoryId = normalizeOptionalText(parentCategoryId);
+  if (!normalizedParentCategoryId) {
+    return undefined;
+  }
+
+  if (options?.currentCategoryId && normalizedParentCategoryId === options.currentCategoryId) {
+    throw new ActionError({
+      code: "BAD_REQUEST",
+      message: "A category cannot be its own parent.",
+    });
+  }
+
+  const parentCategory = await getCategoryForUser(normalizedParentCategoryId, userId);
+  if (!parentCategory) {
+    throw new ActionError({
+      code: "BAD_REQUEST",
+      message: "Selected parent category is invalid for this user.",
+    });
+  }
+
+  return normalizedParentCategoryId;
+}
+
 async function requireTransactionForUser(id: string, userId: string) {
   const transaction = await getTransactionForUser(id, userId);
 
@@ -192,6 +220,22 @@ async function validateTransactionReferencesForUser(
       code: "BAD_REQUEST",
       message: "Transfer account can only be used with transfer transactions.",
     });
+  }
+
+  if (input.type === "transfer" && categoryId) {
+    throw new ActionError({
+      code: "BAD_REQUEST",
+      message: "Transfer transactions cannot use a category in Expense Tracker V1.",
+    });
+  }
+
+  if ((input.type === "expense" || input.type === "income") && category) {
+    if (category.type !== input.type) {
+      throw new ActionError({
+        code: "BAD_REQUEST",
+        message: `${input.type[0].toUpperCase()}${input.type.slice(1)} transactions must use a matching ${input.type} category.`,
+      });
+    }
   }
 
   return {
@@ -327,14 +371,15 @@ export const server = {
     handler: async (input, context) => {
       const user = requireUser(context);
       const now = new Date();
+      const parentCategoryId = await validateParentCategoryForUser(user.id, input.parentCategoryId);
 
       const category = {
         id: crypto.randomUUID(),
         userId: user.id,
-        name: input.name,
+        name: input.name.trim(),
         type: input.type,
-        icon: input.icon,
-        parentCategoryId: input.parentCategoryId,
+        icon: normalizeOptionalText(input.icon),
+        parentCategoryId,
         sortOrder: input.sortOrder,
         isArchived: false,
         createdAt: now,
@@ -363,13 +408,18 @@ export const server = {
       const category = await requireCategoryForUser(input.id, user.id);
 
       const now = new Date();
+      const parentCategoryId = await validateParentCategoryForUser(
+        user.id,
+        input.parentCategoryId ?? category.parentCategoryId ?? undefined,
+        { currentCategoryId: input.id },
+      );
       await db
         .update(Categories)
         .set({
-          name: input.name ?? category.name,
+          name: input.name?.trim() ?? category.name,
           type: input.type ?? category.type,
-          icon: input.icon ?? category.icon,
-          parentCategoryId: input.parentCategoryId ?? category.parentCategoryId,
+          icon: normalizeOptionalText(input.icon) ?? category.icon,
+          parentCategoryId,
           sortOrder: input.sortOrder ?? category.sortOrder,
           isArchived: input.isArchived ?? category.isArchived,
           updatedAt: now,
