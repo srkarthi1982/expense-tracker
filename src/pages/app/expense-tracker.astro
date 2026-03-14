@@ -6,6 +6,7 @@ import {
   AvContainer,
   AvEmptyState,
 } from "@ansiversa/components";
+import { db, eq, Accounts, Transactions } from "astro:db";
 import { actions } from "astro:actions";
 import BarListChart from "../../components/charts/BarListChart.astro";
 import ComparisonStatChart from "../../components/charts/ComparisonStatChart.astro";
@@ -17,17 +18,18 @@ import type { AccountDTO, CategoryDTO, TransactionDTO } from "../../modules/expe
 
 const title = "Expense Tracker – App";
 const description = "Track accounts, categories, and transactions.";
+const userId = Astro.locals.user?.id ?? "";
 
-const [accountsResult, categoriesResult, transactionsResult, summary] = await Promise.all([
-  Astro.callAction(actions.listAccounts, { includeArchived: false }),
+const [allAccountsResult, categoriesResult, transactionsResult, summary] = await Promise.all([
+  db.select().from(Accounts).where(eq(Accounts.userId, userId)),
   Astro.callAction(actions.listCategories, { includeArchived: false }),
-  Astro.callAction(actions.listTransactions, { page: 1, pageSize: 200 }),
-  buildExpenseTrackerSummary(Astro.locals.user?.id ?? ""),
+  db.select().from(Transactions).where(eq(Transactions.userId, userId)),
+  buildExpenseTrackerSummary(userId),
 ]);
 
-const accounts = (((accountsResult as any)?.data ?? accountsResult as any)?.items ?? []) as AccountDTO[];
+const accounts = (allAccountsResult ?? []) as AccountDTO[];
 const categories = (((categoriesResult as any)?.data ?? categoriesResult as any)?.items ?? []) as CategoryDTO[];
-const transactions = ((((transactionsResult as any)?.data ?? transactionsResult as any)?.items ?? []) as TransactionDTO[])
+const transactions = ((transactionsResult ?? []) as TransactionDTO[])
   .sort((a, b) => {
     const aTime = new Date(a.transactionDate ?? a.createdAt ?? 0).getTime();
     const bTime = new Date(b.transactionDate ?? b.createdAt ?? 0).getTime();
@@ -70,6 +72,7 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
             <AvButton type="button" @click="openCreateTransaction()">Create transaction</AvButton>
           </div>
           <p class="av-text-soft" x-text="currencyStatusMessage"></p>
+          <p class="av-text-soft">Archived accounts stay part of historical totals, but remain hidden from normal account-management lists and selectors.</p>
           <template x-if="success">
             <p class="av-text-soft" x-text="success"></p>
           </template>
@@ -269,7 +272,7 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
         <AvCard variant="soft" className="av-auth-stack-md">
           <div class="av-row-between app-row-top">
             <h2 class="av-card-heading">Accounts</h2>
-            <p class="av-text-soft"><span x-text="accounts.length"></span> total</p>
+            <p class="av-text-soft"><span x-text="visibleAccounts.length"></span> active</p>
           </div>
 
           <div class="app-inline-grid">
@@ -295,9 +298,9 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
             <AvButton type="button" @click="createAccount" :disabled="loading">Create account</AvButton>
           </div>
 
-          <template x-if="accounts.length > 0">
+          <template x-if="visibleAccounts.length > 0">
             <div class="av-auth-stack-xs">
-              <template x-for="account in accounts" :key="account.id">
+              <template x-for="account in visibleAccounts" :key="account.id">
                 <div class="av-card av-card-soft">
                   <p class="av-card-heading" x-text="account.name"></p>
                   <p class="av-text-soft">
@@ -436,7 +439,7 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
                 <span class="app-label">Account</span>
                 <select class="app-input" x-model="transactionForm.accountId">
                   <option value="">Select account</option>
-                  <template x-for="account in accounts" :key="account.id">
+                  <template x-for="account in visibleAccounts" :key="account.id">
                     <option :value="account.id" x-text="account.name"></option>
                   </template>
                 </select>
@@ -480,7 +483,7 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
                   <span class="app-label">Destination account</span>
                   <select class="app-input" x-model="transactionForm.transferAccountId">
                     <option value="">Select destination account</option>
-                    <template x-for="account in accounts.filter((account) => account.id !== transactionForm.accountId)" :key="`transfer-create-${account.id}`">
+                    <template x-for="account in visibleAccounts.filter((account) => account.id !== transactionForm.accountId)" :key="`transfer-create-${account.id}`">
                       <option :value="account.id" x-text="account.name"></option>
                     </template>
                   </select>
@@ -524,7 +527,7 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
                 <span class="app-label">Account</span>
                 <select class="app-input" x-model="transactionForm.accountId">
                   <option value="">Select account</option>
-                  <template x-for="account in accounts" :key="account.id">
+                  <template x-for="account in visibleAccounts" :key="account.id">
                     <option :value="account.id" x-text="account.name"></option>
                   </template>
                 </select>
@@ -551,7 +554,7 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
                   <span class="app-label">Destination account</span>
                   <select class="app-input" x-model="transactionForm.transferAccountId">
                     <option value="">Select destination account</option>
-                    <template x-for="account in accounts.filter((account) => account.id !== transactionForm.accountId)" :key="`transfer-edit-${account.id}`">
+                    <template x-for="account in visibleAccounts.filter((account) => account.id !== transactionForm.accountId)" :key="`transfer-edit-${account.id}`">
                       <option :value="account.id" x-text="account.name"></option>
                     </template>
                   </select>

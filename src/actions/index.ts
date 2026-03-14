@@ -45,6 +45,45 @@ async function getTransactionForUser(id: string, userId: string) {
   return transaction ?? null;
 }
 
+async function requireAccountForUser(id: string, userId: string) {
+  const account = await getAccountForUser(id, userId);
+
+  if (!account) {
+    throw new ActionError({
+      code: "NOT_FOUND",
+      message: "Account not found.",
+    });
+  }
+
+  return account;
+}
+
+async function requireCategoryForUser(id: string, userId: string) {
+  const category = await getCategoryForUser(id, userId);
+
+  if (!category) {
+    throw new ActionError({
+      code: "NOT_FOUND",
+      message: "Category not found.",
+    });
+  }
+
+  return category;
+}
+
+async function requireTransactionForUser(id: string, userId: string) {
+  const transaction = await getTransactionForUser(id, userId);
+
+  if (!transaction) {
+    throw new ActionError({
+      code: "NOT_FOUND",
+      message: "Transaction not found.",
+    });
+  }
+
+  return transaction;
+}
+
 function normalizeOptionalText(value?: string | null) {
   const normalized = value?.trim();
   return normalized ? normalized : undefined;
@@ -194,8 +233,9 @@ export const server = {
       };
 
       await db.insert(Accounts).values(account);
+      const createdAccount = await requireAccountForUser(account.id, user.id);
 
-      return { success: true, data: { account } };
+      return { success: true, data: { account: createdAccount } };
     },
   }),
 
@@ -210,14 +250,7 @@ export const server = {
     }),
     handler: async (input, context) => {
       const user = requireUser(context);
-      const account = await getAccountForUser(input.id, user.id);
-
-      if (!account) {
-        throw new ActionError({
-          code: "NOT_FOUND",
-          message: "Account not found.",
-        });
-      }
+      const account = await requireAccountForUser(input.id, user.id);
 
       const now = new Date();
       const effectiveCurrency = await getUserCurrencyState(user.id);
@@ -236,12 +269,7 @@ export const server = {
           updatedAt: now,
         })
         .where(and(eq(Accounts.id, input.id), eq(Accounts.userId, user.id)));
-
-      const updatedAccount = {
-        ...account,
-        ...input,
-        updatedAt: now,
-      };
+      const updatedAccount = await requireAccountForUser(input.id, user.id);
 
       return { success: true, data: { account: updatedAccount } };
     },
@@ -251,22 +279,16 @@ export const server = {
     input: z.object({ id: z.string() }),
     handler: async (input, context) => {
       const user = requireUser(context);
-      const account = await getAccountForUser(input.id, user.id);
-
-      if (!account) {
-        throw new ActionError({
-          code: "NOT_FOUND",
-          message: "Account not found.",
-        });
-      }
+      await requireAccountForUser(input.id, user.id);
 
       const now = new Date();
       await db
         .update(Accounts)
         .set({ isArchived: true, updatedAt: now })
         .where(and(eq(Accounts.id, input.id), eq(Accounts.userId, user.id)));
+      const archivedAccount = await requireAccountForUser(input.id, user.id);
 
-      return { success: true, data: { account: { ...account, isArchived: true, updatedAt: now } } };
+      return { success: true, data: { account: archivedAccount } };
     },
   }),
 
@@ -320,8 +342,9 @@ export const server = {
       };
 
       await db.insert(Categories).values(category);
+      const createdCategory = await requireCategoryForUser(category.id, user.id);
 
-      return { success: true, data: { category } };
+      return { success: true, data: { category: createdCategory } };
     },
   }),
 
@@ -337,14 +360,7 @@ export const server = {
     }),
     handler: async (input, context) => {
       const user = requireUser(context);
-      const category = await getCategoryForUser(input.id, user.id);
-
-      if (!category) {
-        throw new ActionError({
-          code: "NOT_FOUND",
-          message: "Category not found.",
-        });
-      }
+      const category = await requireCategoryForUser(input.id, user.id);
 
       const now = new Date();
       await db
@@ -359,12 +375,7 @@ export const server = {
           updatedAt: now,
         })
         .where(and(eq(Categories.id, input.id), eq(Categories.userId, user.id)));
-
-      const updatedCategory = {
-        ...category,
-        ...input,
-        updatedAt: now,
-      };
+      const updatedCategory = await requireCategoryForUser(input.id, user.id);
 
       return { success: true, data: { category: updatedCategory } };
     },
@@ -374,22 +385,16 @@ export const server = {
     input: z.object({ id: z.string() }),
     handler: async (input, context) => {
       const user = requireUser(context);
-      const category = await getCategoryForUser(input.id, user.id);
-
-      if (!category) {
-        throw new ActionError({
-          code: "NOT_FOUND",
-          message: "Category not found.",
-        });
-      }
+      await requireCategoryForUser(input.id, user.id);
 
       const now = new Date();
       await db
         .update(Categories)
         .set({ isArchived: true, updatedAt: now })
         .where(and(eq(Categories.id, input.id), eq(Categories.userId, user.id)));
+      const archivedCategory = await requireCategoryForUser(input.id, user.id);
 
-      return { success: true, data: { category: { ...category, isArchived: true, updatedAt: now } } };
+      return { success: true, data: { category: archivedCategory } };
     },
   }),
 
@@ -457,8 +462,9 @@ export const server = {
       };
 
       await db.insert(Transactions).values(transaction);
+      const createdTransaction = await requireTransactionForUser(transaction.id, user.id);
 
-      return { success: true, data: { transaction } };
+      return { success: true, data: { transaction: createdTransaction } };
     },
   }),
 
@@ -476,14 +482,7 @@ export const server = {
     }),
     handler: async (input, context) => {
       const user = requireUser(context);
-      const transaction = await getTransactionForUser(input.id, user.id);
-
-      if (!transaction) {
-        throw new ActionError({
-          code: "NOT_FOUND",
-          message: "Transaction not found.",
-        });
-      }
+      const transaction = await requireTransactionForUser(input.id, user.id);
 
       const now = new Date();
       const nextType = input.type ?? (String(transaction.type) as EntryType);
@@ -517,12 +516,7 @@ export const server = {
           updatedAt: now,
         })
         .where(and(eq(Transactions.id, input.id), eq(Transactions.userId, user.id)));
-
-      const updatedTransaction = {
-        ...transaction,
-        ...input,
-        updatedAt: now,
-      };
+      const updatedTransaction = await requireTransactionForUser(input.id, user.id);
 
       return { success: true, data: { transaction: updatedTransaction } };
     },
@@ -532,14 +526,7 @@ export const server = {
     input: z.object({ id: z.string() }),
     handler: async (input, context) => {
       const user = requireUser(context);
-      const transaction = await getTransactionForUser(input.id, user.id);
-
-      if (!transaction) {
-        throw new ActionError({
-          code: "NOT_FOUND",
-          message: "Transaction not found.",
-        });
-      }
+      await requireTransactionForUser(input.id, user.id);
 
       await db
         .delete(Transactions)

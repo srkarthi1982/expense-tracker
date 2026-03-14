@@ -15,6 +15,7 @@ Expense Tracker is an Ansiversa mini-app for logging personal income, expenses, 
 - Auth comes from the parent Ansiversa app. This repo does not own login or user management.
 - `Current balance` means: starting balances + transaction effects.
 - `Net flow` means: income - expense for the selected period.
+- Archived accounts still count in historical totals and current balance, but are hidden from normal account-management UI.
 - Expense Tracker V1 is a single-currency app.
 - Trusted totals and insights require one currency across the user’s accounts and transactions.
 - Transaction-related records are validated server-side. Selected account, category, and transfer account must belong to the authenticated user.

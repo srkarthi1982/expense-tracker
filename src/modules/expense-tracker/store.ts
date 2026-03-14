@@ -133,6 +133,10 @@ export class ExpenseTrackerStore extends AvBaseStore {
     this.accountForm.currency = this.effectiveCurrencyCode;
   }
 
+  get visibleAccounts() {
+    return this.accounts.filter((account) => !account.isArchived);
+  }
+
   get totalIncome() {
     return this.transactions
       .filter((transaction) => transaction.type === "income")
@@ -723,6 +727,11 @@ export class ExpenseTrackerStore extends AvBaseStore {
       .slice(0, 5);
   }
 
+  private prependOrReplaceAccount(nextAccount: AccountDTO) {
+    const remainingAccounts = this.accounts.filter((account) => account.id !== nextAccount.id);
+    this.accounts = [nextAccount, ...remainingAccounts];
+  }
+
   private lastUsedCategoryIdByType(type: QuickEntryType) {
     const match = this.sortedTransactions.find((transaction) =>
       transaction.type === type && Boolean(transaction.categoryId)
@@ -976,7 +985,7 @@ export class ExpenseTrackerStore extends AvBaseStore {
       });
       const data = this.unwrapResult<{ account: AccountDTO }>(res);
       if (data?.account) {
-        this.accounts = [data.account, ...this.accounts];
+        this.prependOrReplaceAccount(data.account);
       }
       this.accountForm = defaultAccountForm();
       this.accountForm.currency = this.effectiveCurrencyCode;
