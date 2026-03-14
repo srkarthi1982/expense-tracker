@@ -32,6 +32,7 @@ const defaultCategoryForm = (): CategoryForm => ({
 const defaultTransactionForm = (): TransactionForm => ({
   accountId: "",
   categoryId: "",
+  transferAccountId: "",
   type: "expense",
   amount: "",
   currency: "",
@@ -73,6 +74,7 @@ type QuickEntryType = "expense" | "income";
 type TransactionPreset = Partial<{
   accountId: string;
   categoryId: string;
+  transferAccountId: string;
   type: EntryType;
   amount: string;
   currency: string;
@@ -128,12 +130,117 @@ export class ExpenseTrackerStore extends AvBaseStore {
     this.accounts = initial?.accounts ?? [];
     this.categories = initial?.categories ?? [];
     this.transactions = initial?.transactions ?? [];
+    this.accountForm.currency = this.effectiveCurrencyCode;
   }
 
   get totalIncome() {
     return this.transactions
       .filter((transaction) => transaction.type === "income")
       .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+  }
+
+  get totalStartingBalance() {
+    return this.accounts.reduce((sum, account) => sum + Number(account.startingBalance || 0), 0);
+  }
+
+  private collectCurrencies() {
+    const currencies = new Set<string>();
+
+    this.accounts.forEach((account) => {
+      const currency = String(account.currency ?? "").trim().toUpperCase();
+      if (currency) {
+        currencies.add(currency);
+      }
+    });
+
+    this.transactions.forEach((transaction) => {
+      const currency = String(transaction.currency ?? "").trim().toUpperCase();
+      if (currency) {
+        currencies.add(currency);
+      }
+    });
+
+    return currencies;
+  }
+
+  get effectiveCurrencyCode() {
+    const currencies = this.collectCurrencies();
+    if (currencies.size !== 1) {
+      return "";
+    }
+
+    return [...currencies][0];
+  }
+
+  get hasMixedCurrencies() {
+    return this.collectCurrencies().size > 1;
+  }
+
+  get supportsTrustedTotals() {
+    return !this.hasMixedCurrencies;
+  }
+
+  get currentBalance() {
+    return this.totalStartingBalance + this.totalIncome - this.totalExpense;
+  }
+
+  get currencyStatusMessage() {
+    if (this.hasMixedCurrencies) {
+      return "Mixed currencies detected. Expense Tracker V1 only supports trusted totals when one currency is used across the app.";
+    }
+
+    if (this.effectiveCurrencyCode) {
+      return `V1 app currency: ${this.effectiveCurrencyCode}`;
+    }
+
+    return "Set one currency on your first account or transaction to lock the app into a single-currency V1 flow.";
+  }
+
+  formatMoney(value: number | null | undefined) {
+    if (value == null || this.hasMixedCurrencies) {
+      return "Unavailable";
+    }
+
+    if (!this.effectiveCurrencyCode) {
+      return Number(value || 0).toFixed(2);
+    }
+
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: this.effectiveCurrencyCode,
+      minimumFractionDigits: 2,
+    }).format(Number(value || 0));
+  }
+
+  formatCurrencyAmount(value: number | null | undefined, currency?: string | null) {
+    const normalizedCurrency = String(currency ?? "").trim().toUpperCase();
+    const amount = Number(value || 0);
+
+    if (!normalizedCurrency) {
+      return this.formatMoney(amount);
+    }
+
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: normalizedCurrency,
+      minimumFractionDigits: 2,
+    }).format(amount);
+  }
+
+  getTransactionCurrency(transaction: TransactionDTO) {
+    const directCurrency = String(transaction.currency ?? "").trim().toUpperCase();
+    if (directCurrency) return directCurrency;
+
+    const accountCurrency = String(
+      this.accounts.find((account) => account.id === transaction.accountId)?.currency ?? "",
+    ).trim().toUpperCase();
+    if (accountCurrency) return accountCurrency;
+
+    return this.effectiveCurrencyCode;
+  }
+
+  formatTransactionAmount(transaction: TransactionDTO) {
+    return this.formatCurrencyAmount(Number(transaction.amount || 0), this.getTransactionCurrency(transaction));
   }
 
   get periodLabel() {
@@ -208,6 +315,15 @@ export class ExpenseTrackerStore extends AvBaseStore {
   }
 
   get filteredSummary() {
+    if (!this.supportsTrustedTotals) {
+      return {
+        income: null,
+        expense: null,
+        netFlow: null,
+        count: this.filteredTransactions.length,
+      };
+    }
+
     const income = this.filteredTransactions
       .filter((transaction) => transaction.type === "income")
       .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
@@ -219,12 +335,16 @@ export class ExpenseTrackerStore extends AvBaseStore {
     return {
       income,
       expense,
-      balance: income - expense,
+      netFlow: income - expense,
       count: this.filteredTransactions.length,
     };
   }
 
   get filteredExpenseByCategory() {
+    if (!this.supportsTrustedTotals) {
+      return [];
+    }
+
     const categoryMap = new Map(this.categories.map((category) => [category.id, category.name]));
     const grouped = new Map<string, { categoryName: string; total: number; count: number }>();
 
@@ -275,6 +395,10 @@ export class ExpenseTrackerStore extends AvBaseStore {
   }
 
   get filteredLargestRecentExpenses() {
+    if (!this.supportsTrustedTotals) {
+      return [];
+    }
+
     return this.filteredTransactions
       .filter((transaction) => transaction.type === "expense")
       .slice(0, 20)
@@ -291,6 +415,10 @@ export class ExpenseTrackerStore extends AvBaseStore {
   }
 
   get monthlyTrendItems() {
+    if (!this.supportsTrustedTotals) {
+      return [];
+    }
+
     const grouped = new Map<string, number>();
 
     this.filteredTransactions
@@ -344,10 +472,22 @@ export class ExpenseTrackerStore extends AvBaseStore {
   }
 
   get smartInsights(): FinancialInsight[] {
+    if (this.hasMixedCurrencies) {
+      return [
+        {
+          id: "currency-warning",
+          tone: "watch",
+          text: "Mixed currencies detected. Standardize records to one currency before trusting totals or insights in V1.",
+        },
+      ];
+    }
+
     const insights: FinancialInsight[] = [];
     const summary = this.filteredSummary;
     const topCategory = this.filteredTopExpenseCategory;
     const comparison = this.periodExpenseMonthComparison;
+    const summaryIncome = summary.income ?? 0;
+    const summaryExpense = summary.expense ?? 0;
 
     if (topCategory) {
       insights.push({
@@ -357,8 +497,8 @@ export class ExpenseTrackerStore extends AvBaseStore {
       });
     }
 
-    if (summary.expense > 0 || summary.income > 0) {
-      if (summary.balance < 0) {
+    if (summaryExpense > 0 || summaryIncome > 0) {
+      if ((summary.netFlow ?? 0) < 0) {
         insights.push({
           id: "balance-watch",
           tone: "watch",
@@ -373,8 +513,8 @@ export class ExpenseTrackerStore extends AvBaseStore {
       }
     }
 
-    if (topCategory && summary.expense > 0) {
-      const share = topCategory.total / summary.expense;
+    if (topCategory && summaryExpense > 0) {
+      const share = topCategory.total / summaryExpense;
       insights.push({
         id: "spend-concentration",
         tone: share >= 0.55 ? "watch" : "info",
@@ -431,11 +571,15 @@ export class ExpenseTrackerStore extends AvBaseStore {
   }
 
   get quickInsightTake() {
+    if (this.hasMixedCurrencies) {
+      return "Standardize currencies before relying on aggregated totals.";
+    }
+
     if (this.filteredTransactions.length === 0) {
       return "Add transactions to unlock smart insights.";
     }
 
-    if (this.filteredSummary.balance < 0) {
+    if ((this.filteredSummary.netFlow ?? 0) < 0) {
       return "This period is expense-heavy.";
     }
 
@@ -445,8 +589,9 @@ export class ExpenseTrackerStore extends AvBaseStore {
     }
 
     const topCategory = this.filteredTopExpenseCategory;
-    if (topCategory && this.filteredSummary.expense > 0) {
-      const share = topCategory.total / this.filteredSummary.expense;
+    const summaryExpense = this.filteredSummary.expense ?? 0;
+    if (topCategory && summaryExpense > 0) {
+      const share = topCategory.total / summaryExpense;
       if (share >= 0.55) {
         return "One category is dominating your spending.";
       }
@@ -462,7 +607,7 @@ export class ExpenseTrackerStore extends AvBaseStore {
   }
 
   get balance() {
-    return this.totalIncome - this.totalExpense;
+    return this.currentBalance;
   }
 
   get sortedTransactions() {
@@ -475,6 +620,15 @@ export class ExpenseTrackerStore extends AvBaseStore {
       formatMonthKey(transaction.transactionDate ?? transaction.createdAt) === monthKey
     );
 
+    if (!this.supportsTrustedTotals) {
+      return {
+        income: null,
+        expense: null,
+        netFlow: null,
+        count: monthTransactions.length,
+      };
+    }
+
     const income = monthTransactions
       .filter((transaction) => transaction.type === "income")
       .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
@@ -486,12 +640,16 @@ export class ExpenseTrackerStore extends AvBaseStore {
     return {
       income,
       expense,
-      balance: income - expense,
+      netFlow: income - expense,
       count: monthTransactions.length,
     };
   }
 
   get expenseByCategory() {
+    if (!this.supportsTrustedTotals) {
+      return [];
+    }
+
     const categoryMap = new Map(this.categories.map((category) => [category.id, category.name]));
     const grouped = new Map<string, { categoryName: string; total: number; count: number }>();
 
@@ -604,8 +762,17 @@ export class ExpenseTrackerStore extends AvBaseStore {
     this.transactionForm = {
       ...defaultTransactionForm(),
       ...preset,
+      currency: preset?.currency || this.effectiveCurrencyCode,
       transactionDate: preset?.transactionDate || new Date().toISOString().slice(0, 10),
     };
+  }
+
+  setTransactionType(type: EntryType) {
+    this.transactionForm.type = type;
+
+    if (type !== "transfer") {
+      this.transactionForm.transferAccountId = "";
+    }
   }
 
   setPeriodPreset(period: PeriodPreset) {
@@ -675,6 +842,7 @@ export class ExpenseTrackerStore extends AvBaseStore {
 
   private validateTransactionForm() {
     if (!this.transactionForm.type) return "Transaction type is required.";
+    if (!this.transactionForm.accountId.trim()) return "Account is required.";
     if (!this.transactionForm.amount.trim()) return "Amount is required.";
 
     const parsedAmount = Number(this.transactionForm.amount);
@@ -684,6 +852,16 @@ export class ExpenseTrackerStore extends AvBaseStore {
 
     if (!this.transactionForm.transactionDate.trim()) {
       return "Transaction date is required.";
+    }
+
+    if (this.transactionForm.type === "transfer") {
+      if (!this.transactionForm.transferAccountId.trim()) {
+        return "Destination account is required for transfers.";
+      }
+
+      if (this.transactionForm.transferAccountId === this.transactionForm.accountId) {
+        return "Transfer source and destination accounts must be different.";
+      }
     }
 
     return null;
@@ -704,6 +882,7 @@ export class ExpenseTrackerStore extends AvBaseStore {
       {
         type,
         categoryId: lastUsedCategoryId,
+        currency: this.effectiveCurrencyCode,
       },
       { quickEntryType: type, label: `Quick add ${type}` },
     );
@@ -719,7 +898,7 @@ export class ExpenseTrackerStore extends AvBaseStore {
         categoryId: source.categoryId ?? "",
         type,
         amount: String(source.amount ?? ""),
-        currency: source.currency ?? "",
+        currency: source.currency ?? this.effectiveCurrencyCode,
         transactionDate: new Date().toISOString().slice(0, 10),
         description: source.description ?? "",
       },
@@ -736,9 +915,10 @@ export class ExpenseTrackerStore extends AvBaseStore {
         categoryId: transaction.categoryId ?? "",
         type: transaction.type,
         amount: String(transaction.amount ?? ""),
-        currency: transaction.currency ?? "",
+        currency: transaction.currency ?? this.effectiveCurrencyCode,
         transactionDate: new Date().toISOString().slice(0, 10),
         description: transaction.description ?? "",
+        transferAccountId: transaction.transferAccountId ?? "",
       },
       { quickEntryType, label: "Reuse recent transaction" },
     );
@@ -755,9 +935,10 @@ export class ExpenseTrackerStore extends AvBaseStore {
     this.transactionForm = {
       accountId: transaction.accountId ?? "",
       categoryId: transaction.categoryId ?? "",
+      transferAccountId: transaction.transferAccountId ?? "",
       type: transaction.type,
       amount: String(transaction.amount ?? ""),
-      currency: transaction.currency ?? "",
+      currency: transaction.currency ?? this.effectiveCurrencyCode,
       transactionDate: toIsoDate(transaction.transactionDate),
       description: transaction.description ?? "",
     };
@@ -788,7 +969,7 @@ export class ExpenseTrackerStore extends AvBaseStore {
       const res = await actions.createAccount({
         name: this.accountForm.name,
         type: this.accountForm.type || undefined,
-        currency: this.accountForm.currency || undefined,
+        currency: this.accountForm.currency || this.effectiveCurrencyCode || undefined,
         startingBalance: this.accountForm.startingBalance
           ? Number(this.accountForm.startingBalance)
           : undefined,
@@ -798,6 +979,7 @@ export class ExpenseTrackerStore extends AvBaseStore {
         this.accounts = [data.account, ...this.accounts];
       }
       this.accountForm = defaultAccountForm();
+      this.accountForm.currency = this.effectiveCurrencyCode;
       this.success = "Account created.";
     } catch (err: any) {
       this.error = err?.message || "Unable to create account.";
@@ -839,9 +1021,13 @@ export class ExpenseTrackerStore extends AvBaseStore {
     return {
       accountId: this.transactionForm.accountId || undefined,
       categoryId: this.transactionForm.categoryId || undefined,
+      transferAccountId:
+        this.transactionForm.type === "transfer"
+          ? this.transactionForm.transferAccountId || undefined
+          : undefined,
       type: this.transactionForm.type,
       amount: Number(this.transactionForm.amount),
-      currency: this.transactionForm.currency || undefined,
+      currency: this.transactionForm.currency || this.effectiveCurrencyCode || undefined,
       transactionDate: toDateOrNow(this.transactionForm.transactionDate),
       description: this.transactionForm.description || undefined,
     };
@@ -931,7 +1117,7 @@ export class ExpenseTrackerStore extends AvBaseStore {
     }
   }
 
-  async quickUpdateType(id: string, type: EntryType) {
+  async quickUpdateType(id: string, type: "expense" | "income") {
     const existing = this.transactions.find((transaction) => transaction.id === id);
     if (!existing || this.loading || existing.type === type) return;
 
@@ -945,7 +1131,7 @@ export class ExpenseTrackerStore extends AvBaseStore {
         categoryId: existing.categoryId ?? undefined,
         type,
         amount: Number(existing.amount),
-        currency: existing.currency ?? undefined,
+        currency: existing.currency ?? (this.effectiveCurrencyCode || undefined),
         transactionDate: toDateOrNow(toIsoDate(existing.transactionDate)),
         description: existing.description ?? undefined,
       });

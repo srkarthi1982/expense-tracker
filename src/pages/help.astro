@@ -3,7 +3,7 @@ import { AvBreadcrumb, AvCard, AvContainer } from "@ansiversa/components";
 import AppShell from "../layouts/AppShell.astro";
 
 const title = "Help – Expense Tracker";
-const description = "How to use Expense Tracker core flows.";
+const description = "How Expense Tracker works in the current V1 flow.";
 ---
 
 <AppShell title={title} description={description}>
@@ -20,16 +20,63 @@ const description = "How to use Expense Tracker core flows.";
           <div>
             <p class="av-kicker">Expense Tracker</p>
             <h1 class="av-section-title">Help</h1>
-            <p class="av-text-soft">Use accounts and categories first, then add transactions from the main app page.</p>
+            <p class="av-text-soft">
+              Expense Tracker helps you log accounts, categories, and transactions in one steady daily workflow.
+            </p>
           </div>
         </AvCard>
 
         <AvCard variant="soft" className="av-auth-stack-md">
           <div class="av-auth-stack-xs">
-            <h2 class="av-card-heading">Slice 1 flow</h2>
-            <p class="av-text-soft">1. Create at least one account.</p>
-            <p class="av-text-soft">2. Create income/expense categories.</p>
-            <p class="av-text-soft">3. Create, edit, and delete transactions.</p>
+            <h2 class="av-card-heading">How to use the app</h2>
+            <p class="av-text-soft">1. Create at least one account so entries have a real place to live.</p>
+            <p class="av-text-soft">2. Create categories for the income, expense, and transfer activity you want to track.</p>
+            <p class="av-text-soft">3. Add transactions from the main app page, then review recent activity and totals.</p>
+          </div>
+        </AvCard>
+
+        <AvCard variant="soft" className="av-auth-stack-md">
+          <div class="av-auth-stack-xs">
+            <h2 class="av-card-heading">Accounts, categories, and transactions</h2>
+            <p class="av-text-soft">
+              Accounts represent where money sits, such as cash, bank, wallet, or card.
+            </p>
+            <p class="av-text-soft">
+              Categories describe why the money moved, such as groceries, rent, salary, or transfers.
+            </p>
+            <p class="av-text-soft">
+              Transactions connect the amount, date, type, account, and optional category into one record.
+            </p>
+          </div>
+        </AvCard>
+
+        <AvCard variant="soft" className="av-auth-stack-md">
+          <div class="av-auth-stack-xs">
+            <h2 class="av-card-heading">Balance and totals</h2>
+            <p class="av-text-soft">
+              Current balance includes account starting balances plus transaction effects across the app.
+            </p>
+            <p class="av-text-soft">
+              Period cards use the label Net flow when they show income minus expense for the selected range.
+            </p>
+            <p class="av-text-soft">
+              Expense Tracker V1 is single-currency. Trusted totals and insights require one currency across your records.
+            </p>
+          </div>
+        </AvCard>
+
+        <AvCard variant="soft" className="av-auth-stack-md">
+          <div class="av-auth-stack-xs">
+            <h2 class="av-card-heading">Simple V1 limitations</h2>
+            <p class="av-text-soft">
+              Auth is provided by the parent Ansiversa app, so this repo does not handle login directly.
+            </p>
+            <p class="av-text-soft">
+              Transfers require both a source account and a destination account.
+            </p>
+            <p class="av-text-soft">
+              Mixed-currency aggregation is intentionally not treated as trusted in V1.
+            </p>
           </div>
         </AvCard>
       </div>

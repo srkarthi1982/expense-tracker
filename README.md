@@ -1,61 +1,68 @@
-# Ansiversa Mini-App Starter
+# Expense Tracker
 
-This repository is the official starter template for all **Ansiversa Mini-Apps**.  
-Every app in the Ansiversa ecosystem begins with this structure—clean, fast, and consistent.
+Expense Tracker is an Ansiversa mini-app for logging personal income, expenses, and account-based money movement in one calm workflow.
 
-If you are a developer or contributor, you can use this template to build any app in the ecosystem.
+## V1 Scope
 
----
+- Create accounts with an optional starting balance.
+- Create categories for expense, income, and transfer records.
+- Create, edit, delete, and review transactions from `/app/expense-tracker`.
+- Review current balance, period income, period expense, net flow, recent activity, and category insights.
+- Use quick-add and reuse flows for common income and expense entries.
 
-## 🚀 Features
+## Core Product Rules
 
-- **Astro 5** — blazing-fast frontend framework  
-- **Tailwind CSS** — utility-first styling  
-- **@ansiversa/components** — shared UI library for unified design  
-- **Global Styles** — imported automatically from the components package  
-- **Clean File Structure** — easy to extend for any type of app  
-- **Ready for Deployment** — optimized for Vercel out of the box  
+- Auth comes from the parent Ansiversa app. This repo does not own login or user management.
+- `Current balance` means: starting balances + transaction effects.
+- `Net flow` means: income - expense for the selected period.
+- Expense Tracker V1 is a single-currency app.
+- Trusted totals and insights require one currency across the user’s accounts and transactions.
+- Transaction-related records are validated server-side. Selected account, category, and transfer account must belong to the authenticated user.
 
----
+## Main Pages
 
-## 📁 Project Structure
+- `/`
+  Auth-aware landing page. Signed-in users see their summary and recent activity. Public visitors see the product landing content.
+- `/app/expense-tracker`
+  Main working screen for accounts, categories, transactions, filters, charts, and quick actions.
+- `/help`
+  Production-facing usage guidance for the current V1 flow.
 
-```
-app/
- ├── public/
- ├── src/
- │   ├── layouts/
- │   │   └── AppShell.astro
- │   └── pages/
- │       ├── index.astro
- │       └── login.astro
- ├── astro.config.mjs
- ├── package.json
- ├── tsconfig.json
- ├── postcss.config.cjs
- └── tailwind.config.cjs
-```
+## Data Structure
 
----
+### Accounts
 
-## 🧩 Using Ansiversa Components
+- Represent where money sits, such as cash, bank, wallet, or card.
+- Can store `currency` and `startingBalance`.
+- Starting balances are included in current balance calculations.
 
-All apps share the same UI look and feel using:
+### Categories
 
-```ts
-import "@ansiversa/components/styles/global.css";
-import { WebLayout, AuthLayout } from "@ansiversa/components";
-```
+- Organize transactions by purpose.
+- Support `expense`, `income`, and `transfer` types.
 
-This ensures:
+### Transactions
 
-- Perfect consistency across **100+ apps**
-- Unified branding  
-- Fully reusable layouts and UI blocks  
+- Belong to the authenticated user.
+- Can reference `accountId`, `categoryId`, and `transferAccountId`.
+- `transfer` entries require both a source account and a destination account.
+- Non-transfer entries must not send `transferAccountId`.
 
----
+## User Flow
 
-## ▶️ Running Locally
+1. Create at least one account.
+2. Set the app currency with the first account or transaction currency.
+3. Create the categories needed for regular income, expense, or transfer tracking.
+4. Add transactions from the main app page.
+5. Review current balance, period net flow, recent activity, and category concentration.
+
+## Current Constraints
+
+- V1 supports a single effective currency per user. Mixed-currency totals are intentionally treated as untrusted.
+- The app is SSR-first and action-driven through `astro:actions`.
+- Freeze phase is active. Changes should stay limited to fixes, cleanup, and behavior hardening unless explicitly approved.
+
+## Local Development
 
 Install dependencies:
 
@@ -63,19 +70,22 @@ Install dependencies:
 npm install
 ```
 
-Start the development server:
+Start the dev server:
 
 ```bash
 npm run dev
 ```
 
-`npm run dev` is pinned to `http://localhost:4321` with strict port mode.  
-If that port is already used by another app/process, the command will fail fast instead of silently switching to another port.
+The dev server is pinned to `http://localhost:4321` with `--strictPort`.
 
-Like `resume-builder`, the public landing page (`/`) and help page (`/help`) stay available locally without auth.
-Protected app routes still redirect to the parent login, and in DEV the fallback parent URL is `http://localhost:2000` unless `PUBLIC_ROOT_APP_URL` is set.
+Public routes:
 
-If local auth is not available and requests are redirecting to the parent domain login, enable a DEV-only bypass in `.env`:
+- `/`
+- `/help`
+
+Protected routes redirect through the parent Ansiversa auth flow. In local DEV, the fallback parent URL is `http://localhost:2000` unless `PUBLIC_ROOT_APP_URL` is set.
+
+If you need a local auth bypass for development only, add this to `.env`:
 
 ```bash
 DEV_AUTH_BYPASS=true
@@ -84,53 +94,17 @@ DEV_AUTH_BYPASS_EMAIL=ansiversa-demo@local
 DEV_AUTH_BYPASS_NAME=Ansiversa Demo
 ```
 
-Build for production:
+## Validation Commands
 
 ```bash
+npm run typecheck
 npm run build
 ```
 
-Preview production build:
+## Deployment
 
-```bash
-npm run preview
-```
+The repo is configured for Astro server output and is intended for Vercel deployment within the Ansiversa ecosystem.
 
----
+## License
 
-## 🌐 Deployment
-
-Ansiversa apps are optimized for **Vercel**:
-
-- No configuration required
-- Astro server output ready
-- CI/CD supported automatically
-
-Just link your repo to Vercel → deploy.
-
----
-
-## 🔗 About Ansiversa
-
-Ansiversa is a curated ecosystem of 100+ premium mini-apps designed for learning, productivity, writing, creativity, utilities, wellness, and more.
-
-Each app shares:
-
-- One global design language  
-- One component system  
-- One identity  
-- Premium UX  
-
-You are currently viewing the official **starter template** that powers all apps.
-
----
-
-## 🤝 Contributing
-
-If you wish to contribute to this template or suggest improvements, please open an issue or submit a pull request.
-
----
-
-## 📄 License
-
-MIT License — free to use and modify.
+MIT

@@ -55,6 +55,7 @@ export type CategoryForm = {
 export type TransactionForm = {
   accountId: string;
   categoryId: string;
+  transferAccountId: string;
   type: EntryType;
   amount: string;
   currency: string;

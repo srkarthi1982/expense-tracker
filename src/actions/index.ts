@@ -2,6 +2,7 @@ import type { ActionAPIContext } from "astro:actions";
 import { ActionError, defineAction } from "astro:actions";
 import { z } from "astro:schema";
 import { db, eq, and, Accounts, Categories, Transactions } from "astro:db";
+import type { EntryType } from "../modules/expense-tracker/types";
 
 function requireUser(context: ActionAPIContext) {
   const locals = context.locals as App.Locals | undefined;
@@ -44,6 +45,126 @@ async function getTransactionForUser(id: string, userId: string) {
   return transaction ?? null;
 }
 
+function normalizeOptionalText(value?: string | null) {
+  const normalized = value?.trim();
+  return normalized ? normalized : undefined;
+}
+
+function normalizeCurrencyCode(value?: string | null) {
+  const normalized = normalizeOptionalText(value);
+  return normalized ? normalized.toUpperCase() : undefined;
+}
+
+function validateSingleCurrency(expectedCurrency: string | null, inputCurrency: string | undefined, scope: string) {
+  if (!expectedCurrency || !inputCurrency) {
+    return;
+  }
+
+  if (expectedCurrency !== inputCurrency) {
+    throw new ActionError({
+      code: "BAD_REQUEST",
+      message: `${scope} must use ${expectedCurrency}. Expense Tracker V1 supports a single currency per user.`,
+    });
+  }
+}
+
+async function getUserCurrencyState(userId: string) {
+  const [accounts, transactions] = await Promise.all([
+    db.select({ currency: Accounts.currency }).from(Accounts).where(eq(Accounts.userId, userId)),
+    db.select({ currency: Transactions.currency }).from(Transactions).where(eq(Transactions.userId, userId)),
+  ]);
+
+  const currencies = new Set(
+    [...accounts, ...transactions]
+      .map((row) => normalizeCurrencyCode(row.currency))
+      .filter((currency): currency is string => Boolean(currency)),
+  );
+
+  if (currencies.size > 1) {
+    throw new ActionError({
+      code: "BAD_REQUEST",
+      message:
+        "Mixed currencies were detected in this account. Expense Tracker V1 only supports one currency for trusted totals.",
+    });
+  }
+
+  const [effectiveCurrency] = [...currencies];
+  return effectiveCurrency ?? null;
+}
+
+async function validateTransactionReferencesForUser(
+  userId: string,
+  input: {
+    accountId?: string;
+    categoryId?: string;
+    transferAccountId?: string;
+    type: EntryType;
+  },
+) {
+  const accountId = normalizeOptionalText(input.accountId);
+  const categoryId = normalizeOptionalText(input.categoryId);
+  const transferAccountId = normalizeOptionalText(input.transferAccountId);
+
+  const [account, category, transferAccount] = await Promise.all([
+    accountId ? getAccountForUser(accountId, userId) : Promise.resolve(null),
+    categoryId ? getCategoryForUser(categoryId, userId) : Promise.resolve(null),
+    transferAccountId ? getAccountForUser(transferAccountId, userId) : Promise.resolve(null),
+  ]);
+
+  if (accountId && !account) {
+    throw new ActionError({
+      code: "BAD_REQUEST",
+      message: "Selected account is invalid for this user.",
+    });
+  }
+
+  if (categoryId && !category) {
+    throw new ActionError({
+      code: "BAD_REQUEST",
+      message: "Selected category is invalid for this user.",
+    });
+  }
+
+  if (transferAccountId && !transferAccount) {
+    throw new ActionError({
+      code: "BAD_REQUEST",
+      message: "Selected transfer account is invalid for this user.",
+    });
+  }
+
+  if (input.type === "transfer") {
+    if (!accountId || !transferAccountId) {
+      throw new ActionError({
+        code: "BAD_REQUEST",
+        message: "Transfer transactions require both a source account and a destination account.",
+      });
+    }
+
+    if (accountId === transferAccountId) {
+      throw new ActionError({
+        code: "BAD_REQUEST",
+        message: "Transfer source and destination accounts must be different.",
+      });
+    }
+  }
+
+  if (input.type !== "transfer" && transferAccountId) {
+    throw new ActionError({
+      code: "BAD_REQUEST",
+      message: "Transfer account can only be used with transfer transactions.",
+    });
+  }
+
+  return {
+    account,
+    category,
+    transferAccount,
+    accountId,
+    categoryId,
+    transferAccountId,
+  };
+}
+
 export const server = {
   createAccount: defineAction({
     input: z.object({
@@ -55,13 +176,17 @@ export const server = {
     handler: async (input, context) => {
       const user = requireUser(context);
       const now = new Date();
+      const effectiveCurrency = await getUserCurrencyState(user.id);
+      const currency = normalizeCurrencyCode(input.currency) ?? effectiveCurrency ?? undefined;
+
+      validateSingleCurrency(effectiveCurrency, currency, "Account currency");
 
       const account = {
         id: crypto.randomUUID(),
         userId: user.id,
-        name: input.name,
-        type: input.type,
-        currency: input.currency,
+        name: input.name.trim(),
+        type: normalizeOptionalText(input.type),
+        currency,
         startingBalance: input.startingBalance,
         isArchived: false,
         createdAt: now,
@@ -95,12 +220,17 @@ export const server = {
       }
 
       const now = new Date();
+      const effectiveCurrency = await getUserCurrencyState(user.id);
+      const nextCurrency = normalizeCurrencyCode(input.currency) ?? account.currency ?? effectiveCurrency ?? undefined;
+
+      validateSingleCurrency(effectiveCurrency, nextCurrency, "Account currency");
+
       await db
         .update(Accounts)
         .set({
-          name: input.name ?? account.name,
-          type: input.type ?? account.type,
-          currency: input.currency ?? account.currency,
+          name: input.name?.trim() ?? account.name,
+          type: normalizeOptionalText(input.type) ?? account.type,
+          currency: nextCurrency,
           startingBalance: input.startingBalance ?? account.startingBalance,
           isArchived: input.isArchived ?? account.isArchived,
           updatedAt: now,
@@ -300,19 +430,28 @@ export const server = {
     }),
     handler: async (input, context) => {
       const user = requireUser(context);
+      const references = await validateTransactionReferencesForUser(user.id, input);
       const now = new Date();
+      const effectiveCurrency = await getUserCurrencyState(user.id);
+      const transactionCurrency =
+        normalizeCurrencyCode(input.currency)
+        ?? references.account?.currency
+        ?? effectiveCurrency
+        ?? undefined;
+
+      validateSingleCurrency(effectiveCurrency, transactionCurrency, "Transaction currency");
 
       const transaction = {
         id: crypto.randomUUID(),
         userId: user.id,
-        accountId: input.accountId,
-        categoryId: input.categoryId,
+        accountId: references.accountId,
+        categoryId: references.categoryId,
         type: input.type,
         amount: input.amount,
-        currency: input.currency,
+        currency: transactionCurrency,
         transactionDate: input.transactionDate ?? new Date(),
-        description: input.description,
-        transferAccountId: input.transferAccountId,
+        description: normalizeOptionalText(input.description),
+        transferAccountId: references.transferAccountId,
         createdAt: now,
         updatedAt: now,
       };
@@ -347,17 +486,34 @@ export const server = {
       }
 
       const now = new Date();
+      const nextType = input.type ?? (String(transaction.type) as EntryType);
+      const references = await validateTransactionReferencesForUser(user.id, {
+        accountId: input.accountId ?? transaction.accountId ?? undefined,
+        categoryId: input.categoryId ?? transaction.categoryId ?? undefined,
+        transferAccountId: input.transferAccountId ?? transaction.transferAccountId ?? undefined,
+        type: nextType,
+      });
+      const effectiveCurrency = await getUserCurrencyState(user.id);
+      const transactionCurrency =
+        normalizeCurrencyCode(input.currency)
+        ?? references.account?.currency
+        ?? transaction.currency
+        ?? effectiveCurrency
+        ?? undefined;
+
+      validateSingleCurrency(effectiveCurrency, transactionCurrency, "Transaction currency");
+
       await db
         .update(Transactions)
         .set({
-          accountId: input.accountId ?? transaction.accountId,
-          categoryId: input.categoryId ?? transaction.categoryId,
-          type: input.type ?? transaction.type,
+          accountId: references.accountId,
+          categoryId: references.categoryId,
+          type: nextType,
           amount: input.amount ?? transaction.amount,
-          currency: input.currency ?? transaction.currency,
+          currency: transactionCurrency,
           transactionDate: input.transactionDate ?? transaction.transactionDate,
-          description: input.description ?? transaction.description,
-          transferAccountId: input.transferAccountId ?? transaction.transferAccountId,
+          description: normalizeOptionalText(input.description) ?? transaction.description,
+          transferAccountId: references.transferAccountId,
           updatedAt: now,
         })
         .where(and(eq(Transactions.id, input.id), eq(Transactions.userId, user.id)));
@@ -408,10 +564,28 @@ export const server = {
       const filters = [eq(Transactions.userId, user.id)];
 
       if (input.accountId) {
+        const account = await getAccountForUser(input.accountId, user.id);
+
+        if (!account) {
+          throw new ActionError({
+            code: "BAD_REQUEST",
+            message: "Selected account filter is invalid for this user.",
+          });
+        }
+
         filters.push(eq(Transactions.accountId, input.accountId));
       }
 
       if (input.categoryId) {
+        const category = await getCategoryForUser(input.categoryId, user.id);
+
+        if (!category) {
+          throw new ActionError({
+            code: "BAD_REQUEST",
+            message: "Selected category filter is invalid for this user.",
+          });
+        }
+
         filters.push(eq(Transactions.categoryId, input.categoryId));
       }
 
@@ -427,12 +601,18 @@ export const server = {
         .where(whereClause)
         .limit(input.pageSize)
         .offset(offset);
+      const total = (
+        await db
+          .select({ id: Transactions.id })
+          .from(Transactions)
+          .where(whereClause)
+      ).length;
 
       return {
         success: true,
         data: {
           items: transactions,
-          total: transactions.length,
+          total,
           page: input.page,
           pageSize: input.pageSize,
         },

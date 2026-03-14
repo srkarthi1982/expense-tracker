@@ -1,9 +1,9 @@
 ---
 import { AvButton, AvCard, AvContainer, AvEmptyState, AvTimeline } from "@ansiversa/components";
-import { db, eq, and, Categories, Transactions } from "astro:db";
+import { db, eq, and, Accounts, Categories, Transactions } from "astro:db";
 import { buildExpenseTrackerSummary } from "../dashboard/summary.schema";
 import AppShell from "../layouts/AppShell.astro";
-import type { CategoryDTO, TransactionDTO } from "../modules/expense-tracker/types";
+import type { AccountDTO, CategoryDTO, TransactionDTO } from "../modules/expense-tracker/types";
 
 export const prerender = false;
 
@@ -66,9 +66,10 @@ const devBypassUserId =
 const userId = Astro.locals.user?.id ?? devBypassUserId;
 const hasUser = userId.length > 0;
 
-const [categoriesResult, transactionsResult, summary] = await Promise.all(
+const [accountsResult, categoriesResult, transactionsResult, summary] = await Promise.all(
   hasUser
     ? [
+        db.select().from(Accounts).where(and(eq(Accounts.userId, userId), eq(Accounts.isArchived, false))),
         db.select().from(Categories).where(and(eq(Categories.userId, userId), eq(Categories.isArchived, false))),
         db.select().from(Transactions).where(eq(Transactions.userId, userId)),
         buildExpenseTrackerSummary(userId),
@@ -76,10 +77,12 @@ const [categoriesResult, transactionsResult, summary] = await Promise.all(
     : [
         Promise.resolve([]),
         Promise.resolve([]),
+        Promise.resolve([]),
         buildExpenseTrackerSummary(""),
       ],
 );
 
+const accounts = (accountsResult ?? []) as AccountDTO[];
 const categories = (categoriesResult ?? []) as CategoryDTO[];
 const transactions = ((transactionsResult ?? []) as TransactionDTO[])
   .sort((a, b) => {
@@ -113,12 +116,46 @@ for (const [categoryId, amount] of expenseByCategory.entries()) {
 
 const latestTransaction = recentTransactions[0];
 
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("en-US", {
+const formatCurrency = (value: number) => {
+  if (summary.currencyMode === "mixed") {
+    return "Unavailable";
+  }
+
+  if (!summary.currencyCode) {
+    return value.toFixed(2);
+  }
+
+  return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "USD",
+    currency: summary.currencyCode,
     minimumFractionDigits: 2,
   }).format(value);
+};
+
+const formatTransactionAmount = (transaction: TransactionDTO) => {
+  const transactionCurrency = String(transaction.currency ?? "").trim().toUpperCase();
+  const accountCurrency = String(
+    accounts.find((account) => account.id === transaction.accountId)?.currency ?? "",
+  ).trim().toUpperCase();
+  const currency = transactionCurrency || accountCurrency || summary.currencyCode || "";
+
+  if (!currency) {
+    return Number(transaction.amount ?? 0).toFixed(2);
+  }
+
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 2,
+  }).format(Number(transaction.amount ?? 0));
+};
+
+const currencyStatusMessage =
+  summary.currencyMode === "mixed"
+    ? "Mixed currencies detected. Expense Tracker V1 only supports trusted totals when one currency is used across the app."
+    : summary.currencyCode
+      ? `V1 app currency: ${summary.currencyCode}`
+      : "Expense Tracker V1 works as a single-currency app. Set one currency on your accounts or transactions to lock it in.";
 ---
 
 <AppShell title={title} description={description}>
@@ -134,10 +171,11 @@ const formatCurrency = (value: number) =>
                 A calm place to track spending and income daily without spreadsheet clutter.
               </p>
               <ul class="home-bullets">
-                <li>See income, expenses, and balance in seconds.</li>
+                <li>See income, expenses, and current balance in seconds.</li>
                 <li>Organize every entry with clean account and category context.</li>
                 <li>Keep your money picture useful for daily decisions.</li>
               </ul>
+              <p class="av-text-soft">{currencyStatusMessage}</p>
               <div class="av-row-wrap">
                 <AvButton href="/app/expense-tracker">View transactions</AvButton>
                 <AvButton href="/help" variant="ghost">Help</AvButton>
@@ -157,7 +195,7 @@ const formatCurrency = (value: number) =>
                 </div>
                 <div>
                   <p class="av-text-soft">Current balance</p>
-                  <p class="home-number">{formatCurrency(summary.balance)}</p>
+                  <p class="home-number">{formatCurrency(summary.currentBalance)}</p>
                 </div>
                 <div>
                   <p class="av-text-soft">Transactions</p>
@@ -170,7 +208,7 @@ const formatCurrency = (value: number) =>
                   Latest activity:
                   <strong>
                     {latestTransaction
-                      ? `${latestTransaction.type} · ${formatCurrency(Number(latestTransaction.amount ?? 0))}`
+                      ? `${latestTransaction.type} · ${formatTransactionAmount(latestTransaction)}`
                       : "No transactions yet"}
                   </strong>
                 </p>
@@ -193,7 +231,7 @@ const formatCurrency = (value: number) =>
             </AvCard>
             <AvCard variant="soft">
               <p class="av-text-soft">Current balance</p>
-              <h2 class="av-section-title">{formatCurrency(summary.balance)}</h2>
+              <h2 class="av-section-title">{formatCurrency(summary.currentBalance)}</h2>
             </AvCard>
             <AvCard variant="soft">
               <p class="av-text-soft">Transactions</p>
@@ -215,7 +253,7 @@ const formatCurrency = (value: number) =>
             </AvCard>
             <AvCard variant="soft">
               <h3 class="av-card-heading">Clear balance visibility</h3>
-              <p class="av-text-soft">Know where you stand with always-on totals for income, expenses, and balance.</p>
+              <p class="av-text-soft">Know where you stand with starting balances plus transaction effects shown as one current balance.</p>
             </AvCard>
             <AvCard variant="soft">
               <h3 class="av-card-heading">Fast daily logging</h3>
@@ -250,7 +288,7 @@ const formatCurrency = (value: number) =>
               {recentTransactions.map((transaction) => (
                 <AvCard variant="soft" className="av-row-between app-row-top">
                   <div>
-                    <p class="av-card-heading">{formatCurrency(Number(transaction.amount ?? 0))}</p>
+                    <p class="av-card-heading">{formatTransactionAmount(transaction)}</p>
                     <p class="av-text-soft">
                       {categoryById.get(transaction.categoryId ?? "") ?? "Uncategorized"} · {(String(transaction.transactionDate || "")).slice(0, 10)}
                     </p>
@@ -279,6 +317,7 @@ const formatCurrency = (value: number) =>
               <ul class="av-list">
                 <li>Log income and expense entries with account and category context</li>
                 <li>Review balances and activity without switching between scattered notes</li>
+                <li>Use one currency across the app so totals remain trusted in V1</li>
                 <li>Stay consistent with a lightweight daily tracking routine</li>
               </ul>
               <div class="av-row-wrap">
@@ -294,7 +333,7 @@ const formatCurrency = (value: number) =>
               <ol class="av-list">
                 <li>1. Add income and expense entries</li>
                 <li>2. Organize each record by category and account</li>
-                <li>3. Review balance and recent activity in one place</li>
+                <li>3. Review current balance and recent activity in one place</li>
               </ol>
               <div class="av-row-between">
                 <p class="av-text-soft">Focus: daily clarity</p>

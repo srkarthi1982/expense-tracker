@@ -69,6 +69,7 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
             </div>
             <AvButton type="button" @click="openCreateTransaction()">Create transaction</AvButton>
           </div>
+          <p class="av-text-soft" x-text="currencyStatusMessage"></p>
           <template x-if="success">
             <p class="av-text-soft" x-text="success"></p>
           </template>
@@ -79,20 +80,22 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
 
         <div class="app-summary-grid">
           <AvCard variant="soft">
+            <p class="av-text-soft">Current balance</p>
+            <h2 class="av-section-title" x-text="formatMoney(currentBalance)"></h2>
+            <p class="av-text-soft">Starting balances + all transaction effects</p>
+          </AvCard>
+          <AvCard variant="soft">
             <p class="av-text-soft">Income (<span x-text="periodLabel"></span>)</p>
-            <h2 class="av-section-title" x-text="filteredSummary.income.toFixed(2)"></h2>
+            <h2 class="av-section-title" x-text="formatMoney(filteredSummary.income)"></h2>
           </AvCard>
           <AvCard variant="soft">
             <p class="av-text-soft">Expense (<span x-text="periodLabel"></span>)</p>
-            <h2 class="av-section-title" x-text="filteredSummary.expense.toFixed(2)"></h2>
+            <h2 class="av-section-title" x-text="formatMoney(filteredSummary.expense)"></h2>
           </AvCard>
           <AvCard variant="soft">
-            <p class="av-text-soft">Balance (<span x-text="periodLabel"></span>)</p>
-            <h2 class="av-section-title" x-text="filteredSummary.balance.toFixed(2)"></h2>
-          </AvCard>
-          <AvCard variant="soft">
-            <p class="av-text-soft">Transactions (<span x-text="periodLabel"></span>)</p>
-            <h2 class="av-section-title" x-text="filteredSummary.count"></h2>
+            <p class="av-text-soft">Net flow (<span x-text="periodLabel"></span>)</p>
+            <h2 class="av-section-title" x-text="formatMoney(filteredSummary.netFlow)"></h2>
+            <p class="av-text-soft">Transactions: <span x-text="filteredSummary.count"></span></p>
             <p class="av-text-soft">Synced {summary.updatedAt.slice(0, 10)}</p>
           </AvCard>
         </div>
@@ -169,7 +172,7 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
               <template x-if="filteredTopExpenseCategory">
                 <p class="av-text-soft">
                   Top: <strong x-text="filteredTopExpenseCategory.categoryName"></strong>
-                  · <span x-text="filteredTopExpenseCategory.total.toFixed(2)"></span>
+                  · <span x-text="formatMoney(filteredTopExpenseCategory.total)"></span>
                 </p>
               </template>
             </div>
@@ -196,7 +199,7 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
               <div class="av-auth-stack-xs">
                 <template x-for="transaction in filteredLargestRecentExpenses" :key="transaction.id">
                   <div class="av-card av-card-soft">
-                    <p class="av-card-heading" x-text="Number(transaction.amount).toFixed(2)"></p>
+                    <p class="av-card-heading" x-text="formatTransactionAmount(transaction)"></p>
                     <p class="av-text-soft">
                       <span x-text="transaction.description || 'No description'"></span>
                       · <span x-text="(String(transaction.transactionDate || '')).slice(0, 10)"></span>
@@ -250,7 +253,7 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
               <template x-for="transaction in recentReusableTransactions" :key="`reuse-${transaction.id}`">
                 <div class="av-card av-card-soft av-row-between app-row-top">
                   <div>
-                    <p class="av-card-heading" x-text="`${Number(transaction.amount).toFixed(2)}`"></p>
+                    <p class="av-card-heading" x-text="formatTransactionAmount(transaction)"></p>
                     <p class="av-text-soft">
                       <span x-text="transaction.description || 'No description'"></span>
                       · <span x-text="(String(transaction.transactionDate || '')).slice(0, 10)"></span>
@@ -279,14 +282,15 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
               <input class="app-input" type="text" x-model="accountForm.type" maxlength="60" placeholder="cash / bank / card" />
             </label>
             <label class="app-field">
-              <span class="app-label">Currency</span>
-              <input class="app-input" type="text" x-model="accountForm.currency" maxlength="10" />
+              <span class="app-label">Currency code</span>
+              <input class="app-input" type="text" x-model="accountForm.currency" maxlength="10" placeholder="AED" />
             </label>
             <label class="app-field">
               <span class="app-label">Starting balance</span>
               <input class="app-input" type="number" step="0.01" x-model="accountForm.startingBalance" />
             </label>
           </div>
+          <p class="av-text-soft">Expense Tracker V1 uses a single currency across accounts and totals. Your first saved currency becomes the app currency.</p>
           <div>
             <AvButton type="button" @click="createAccount" :disabled="loading">Create account</AvButton>
           </div>
@@ -299,6 +303,10 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
                   <p class="av-text-soft">
                     <span x-text="account.type || 'Type not set'"></span>
                     · <span x-text="account.currency || 'Currency not set'"></span>
+                  </p>
+                  <p class="av-text-soft">
+                    Starting balance:
+                    <span x-text="formatCurrencyAmount(account.startingBalance || 0, account.currency)"></span>
                   </p>
                 </div>
               </template>
@@ -376,7 +384,7 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
                       <div class="av-card av-card-soft av-auth-stack-xs">
                         <div class="av-row-between app-row-top">
                           <div>
-                            <h3 class="av-card-heading" x-text="`${Number(transaction.amount).toFixed(2)}`"></h3>
+                            <h3 class="av-card-heading" x-text="formatTransactionAmount(transaction)"></h3>
                             <p class="av-text-soft">
                               <span x-text="transaction.description || 'No description'"></span>
                               · <span x-text="(String(transaction.transactionDate || '')).slice(0, 10)"></span>
@@ -386,19 +394,23 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
                         </div>
 
                         <div class="app-meta-grid">
-                          <label class="app-inline-field">
-                            <span class="av-text-soft">Type</span>
-                            <select
-                              class="app-input"
-                              :value="transaction.type"
-                              @change="quickUpdateType(transaction.id, $event.target.value)"
-                              :disabled="loading"
-                            >
-                              <option value="expense">Expense</option>
-                              <option value="income">Income</option>
-                              <option value="transfer">Transfer</option>
-                            </select>
-                          </label>
+                          <template x-if="transaction.type === 'transfer'">
+                            <p class="av-text-soft">Transfers must be edited in the full form so both accounts stay valid.</p>
+                          </template>
+                          <template x-if="transaction.type !== 'transfer'">
+                            <label class="app-inline-field">
+                              <span class="av-text-soft">Type</span>
+                              <select
+                                class="app-input"
+                                :value="transaction.type"
+                                @change="quickUpdateType(transaction.id, $event.target.value)"
+                                :disabled="loading"
+                              >
+                                <option value="expense">Expense</option>
+                                <option value="income">Income</option>
+                              </select>
+                            </label>
+                          </template>
                         </div>
 
                         <div class="av-row-wrap">
@@ -457,19 +469,30 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
               </template>
               <label class="app-field">
                 <span class="app-label">Type</span>
-                <select class="app-input" x-model="transactionForm.type">
+                <select class="app-input" :value="transactionForm.type" @change="setTransactionType($event.target.value)">
                   <option value="expense">Expense</option>
                   <option value="income">Income</option>
                   <option value="transfer">Transfer</option>
                 </select>
               </label>
+              <template x-if="transactionForm.type === 'transfer'">
+                <label class="app-field">
+                  <span class="app-label">Destination account</span>
+                  <select class="app-input" x-model="transactionForm.transferAccountId">
+                    <option value="">Select destination account</option>
+                    <template x-for="account in accounts.filter((account) => account.id !== transactionForm.accountId)" :key="`transfer-create-${account.id}`">
+                      <option :value="account.id" x-text="account.name"></option>
+                    </template>
+                  </select>
+                </label>
+              </template>
               <label class="app-field">
                 <span class="app-label">Amount</span>
                 <input class="app-input" type="number" step="0.01" x-model="transactionForm.amount" />
               </label>
               <label class="app-field">
-                <span class="app-label">Currency</span>
-                <input class="app-input" type="text" x-model="transactionForm.currency" maxlength="10" />
+                <span class="app-label">Currency code</span>
+                <input class="app-input" type="text" x-model="transactionForm.currency" maxlength="10" :placeholder="effectiveCurrencyCode || 'AED'" />
               </label>
               <label class="app-field">
                 <span class="app-label">Date</span>
@@ -480,6 +503,7 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
                 <textarea class="app-input" x-model="transactionForm.description" rows="3" maxlength="500"></textarea>
               </label>
             </div>
+            <p class="av-text-soft">V1 totals assume one currency. Leave this aligned to the app currency shown above.</p>
             <div slot="notice">
               <p class="app-form-error" x-show="error" x-text="error"></p>
             </div>
@@ -516,19 +540,30 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
               </label>
               <label class="app-field">
                 <span class="app-label">Type</span>
-                <select class="app-input" x-model="transactionForm.type">
+                <select class="app-input" :value="transactionForm.type" @change="setTransactionType($event.target.value)">
                   <option value="expense">Expense</option>
                   <option value="income">Income</option>
                   <option value="transfer">Transfer</option>
                 </select>
               </label>
+              <template x-if="transactionForm.type === 'transfer'">
+                <label class="app-field">
+                  <span class="app-label">Destination account</span>
+                  <select class="app-input" x-model="transactionForm.transferAccountId">
+                    <option value="">Select destination account</option>
+                    <template x-for="account in accounts.filter((account) => account.id !== transactionForm.accountId)" :key="`transfer-edit-${account.id}`">
+                      <option :value="account.id" x-text="account.name"></option>
+                    </template>
+                  </select>
+                </label>
+              </template>
               <label class="app-field">
                 <span class="app-label">Amount</span>
                 <input class="app-input" type="number" step="0.01" x-model="transactionForm.amount" />
               </label>
               <label class="app-field">
-                <span class="app-label">Currency</span>
-                <input class="app-input" type="text" x-model="transactionForm.currency" maxlength="10" />
+                <span class="app-label">Currency code</span>
+                <input class="app-input" type="text" x-model="transactionForm.currency" maxlength="10" :placeholder="effectiveCurrencyCode || 'AED'" />
               </label>
               <label class="app-field">
                 <span class="app-label">Date</span>
@@ -539,6 +574,7 @@ const transactions = ((((transactionsResult as any)?.data ?? transactionsResult 
                 <textarea class="app-input" x-model="transactionForm.description" rows="3" maxlength="500"></textarea>
               </label>
             </div>
+            <p class="av-text-soft">V1 totals assume one currency. Leave this aligned to the app currency shown above.</p>
             <div slot="notice">
               <p class="app-form-error" x-show="error" x-text="error"></p>
             </div>
