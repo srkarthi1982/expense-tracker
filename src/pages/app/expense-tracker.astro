@@ -302,12 +302,17 @@ const transactions = ((transactionsResult ?? []) as TransactionDTO[])
           <template x-if="visibleAccounts.length > 0">
             <div class="av-auth-stack-xs">
               <template x-for="account in visibleAccounts" :key="account.id">
-                <div class="av-card av-card-soft">
-                  <p class="av-card-heading" x-text="account.name"></p>
-                  <p class="av-text-soft">
-                    <span x-text="account.type || 'Type not set'"></span>
-                    · <span x-text="account.currency || 'Currency not set'"></span>
-                  </p>
+                <div class="av-card av-card-soft av-auth-stack-xs">
+                  <div class="av-row-between app-row-top">
+                    <div>
+                      <p class="av-card-heading" x-text="account.name"></p>
+                      <p class="av-text-soft">
+                        <span x-text="account.type || 'Type not set'"></span>
+                        · <span x-text="account.currency || 'Currency not set'"></span>
+                      </p>
+                    </div>
+                    <AvButton type="button" variant="ghost" @click="archiveAccount(account.id)" :disabled="loading">Archive</AvButton>
+                  </div>
                   <p class="av-text-soft">
                     Starting balance:
                     <span x-text="formatCurrencyAmount(account.startingBalance || 0, account.currency)"></span>

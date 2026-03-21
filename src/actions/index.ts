@@ -222,6 +222,13 @@ async function validateTransactionReferencesForUser(
     });
   }
 
+  if ((input.type === "expense" || input.type === "income") && !categoryId) {
+    throw new ActionError({
+      code: "BAD_REQUEST",
+      message: "Please select a category.",
+    });
+  }
+
   if (input.type === "transfer" && categoryId) {
     throw new ActionError({
       code: "BAD_REQUEST",

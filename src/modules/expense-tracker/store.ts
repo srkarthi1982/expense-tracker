@@ -766,6 +766,18 @@ export class ExpenseTrackerStore extends AvBaseStore {
     this.accounts = [nextAccount, ...remainingAccounts];
   }
 
+  private async refreshAccounts() {
+    const res = await actions.listAccounts({ includeArchived: true });
+    const data = this.unwrapResult<{ items: AccountDTO[] }>(res);
+    this.accounts = data?.items ?? [];
+  }
+
+  private async refreshCategories() {
+    const res = await actions.listCategories({ includeArchived: true });
+    const data = this.unwrapResult<{ items: CategoryDTO[] }>(res);
+    this.categories = data?.items ?? [];
+  }
+
   private lastUsedCategoryIdByType(type: QuickEntryType) {
     const match = this.sortedTransactions.find((transaction) =>
       transaction.type === type
@@ -898,6 +910,9 @@ export class ExpenseTrackerStore extends AvBaseStore {
   private validateTransactionForm() {
     if (!this.transactionForm.type) return "Transaction type is required.";
     if (!this.transactionForm.accountId.trim()) return "Account is required.";
+    if (this.transactionForm.type !== "transfer" && !this.transactionForm.categoryId.trim()) {
+      return "Category is required.";
+    }
     if (!this.transactionForm.amount.trim()) return "Amount is required.";
 
     const parsedAmount = Number(this.transactionForm.amount);
@@ -1033,6 +1048,7 @@ export class ExpenseTrackerStore extends AvBaseStore {
       if (data?.account) {
         this.prependOrReplaceAccount(data.account);
       }
+      await this.refreshAccounts();
       this.accountForm = defaultAccountForm();
       this.accountForm.currency = this.effectiveCurrencyCode;
       this.success = "Account created.";
@@ -1063,10 +1079,41 @@ export class ExpenseTrackerStore extends AvBaseStore {
       if (data?.category) {
         this.categories = [data.category, ...this.categories];
       }
+      await this.refreshCategories();
       this.categoryForm = defaultCategoryForm();
       this.success = "Category created.";
     } catch (err: any) {
       this.error = err?.message || "Unable to create category.";
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  async archiveAccount(id: string) {
+    if (!id || this.loading) return;
+
+    const account = this.accounts.find((item) => item.id === id);
+    const approved = typeof window !== "undefined"
+      ? window.confirm(
+        `Archive "${account?.name || "this account"}"? Archived accounts stay in historical totals but disappear from normal account lists and selectors.`,
+      )
+      : true;
+
+    if (!approved) return;
+
+    this.loading = true;
+    this.resetMessages();
+
+    try {
+      const res = await actions.archiveAccount({ id });
+      const data = this.unwrapResult<{ account: AccountDTO }>(res);
+      if (data?.account) {
+        this.prependOrReplaceAccount(data.account);
+      }
+      await this.refreshAccounts();
+      this.success = "Account archived.";
+    } catch (err: any) {
+      this.error = err?.message || "Unable to archive account.";
     } finally {
       this.loading = false;
     }
