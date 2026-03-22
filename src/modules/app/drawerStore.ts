@@ -1,7 +1,7 @@
 import type { Alpine } from "alpinejs";
 import { AvBaseStore } from "@ansiversa/components/alpine";
 
-export type DrawerKey = "createTransaction" | "editTransaction";
+export type DrawerKey = "createAccount" | "createCategory" | "createTransaction" | "editTransaction";
 
 export class AppDrawerStore extends AvBaseStore {
   activeDrawer: DrawerKey | null = null;

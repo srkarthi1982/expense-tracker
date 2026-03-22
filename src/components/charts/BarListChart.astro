@@ -32,7 +32,7 @@ const barStyleExpression = `\`width: \${widthPercent(item.value, ${resolvedMaxEx
 
   <template x-if={`${itemsExpression}.length > 0`}>
     <div class="chart-stack-xs">
-      <template x-for={`item in ${itemsExpression}`} :key="item.label">
+      <template x-for={`(item, index) in ${itemsExpression}`} :key="item.key || item.id || `${item.label || 'chart-item'}-${index}`">
         <div class="chart-stack-xxs">
           <div class="chart-row">
             <p class="chart-label" x-text="item.label"></p>

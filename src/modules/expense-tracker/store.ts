@@ -384,13 +384,14 @@ export class ExpenseTrackerStore extends AvBaseStore {
     }
 
     const categoryMap = new Map(this.categories.map((category) => [category.id, category.name]));
-    const grouped = new Map<string, { categoryName: string; total: number; count: number }>();
+    const grouped = new Map<string, { categoryId: string; categoryName: string; total: number; count: number }>();
 
     this.filteredTransactions
       .filter((transaction) => transaction.type === "expense")
       .forEach((transaction) => {
         const key = transaction.categoryId || "uncategorized";
         const current = grouped.get(key) ?? {
+          categoryId: key,
           categoryName: categoryMap.get(transaction.categoryId || "") || "Uncategorized",
           total: 0,
           count: 0,
@@ -446,6 +447,7 @@ export class ExpenseTrackerStore extends AvBaseStore {
 
   get categoryChartItems() {
     return this.filteredExpenseByCategory.map((item) => ({
+      key: item.categoryId,
       label: item.categoryName,
       value: item.total,
       meta: `${item.count} transactions`,
@@ -884,7 +886,19 @@ export class ExpenseTrackerStore extends AvBaseStore {
       const message = result.error?.message || result.error;
       throw new Error(message || "Request failed.");
     }
-    return (result?.data ?? result) as T;
+
+    const payload = result?.data ?? result;
+
+    if (payload?.error) {
+      const message = payload.error?.message || payload.error;
+      throw new Error(message || "Request failed.");
+    }
+
+    if (payload && typeof payload === "object" && "success" in payload && "data" in payload) {
+      return payload.data as T;
+    }
+
+    return payload as T;
   }
 
   private resetMessages() {
@@ -935,6 +949,32 @@ export class ExpenseTrackerStore extends AvBaseStore {
     }
 
     return null;
+  }
+
+  openCreateAccount() {
+    this.accountForm = defaultAccountForm();
+    this.accountForm.currency = this.effectiveCurrencyCode;
+    this.resetMessages();
+    this.emitDrawerEvent("expense-drawer-open", { key: "createAccount" });
+  }
+
+  closeAccountDrawer() {
+    this.accountForm = defaultAccountForm();
+    this.accountForm.currency = this.effectiveCurrencyCode;
+    this.error = null;
+    this.emitDrawerEvent("expense-drawer-close");
+  }
+
+  openCreateCategory() {
+    this.categoryForm = defaultCategoryForm();
+    this.resetMessages();
+    this.emitDrawerEvent("expense-drawer-open", { key: "createCategory" });
+  }
+
+  closeCategoryDrawer() {
+    this.categoryForm = defaultCategoryForm();
+    this.error = null;
+    this.emitDrawerEvent("expense-drawer-close");
   }
 
   openCreateTransaction(preset?: TransactionPreset, options?: { quickEntryType?: QuickEntryType; label?: string }) {
@@ -1052,6 +1092,7 @@ export class ExpenseTrackerStore extends AvBaseStore {
       this.accountForm = defaultAccountForm();
       this.accountForm.currency = this.effectiveCurrencyCode;
       this.success = "Account created.";
+      this.emitDrawerEvent("expense-drawer-close");
     } catch (err: any) {
       this.error = err?.message || "Unable to create account.";
     } finally {
@@ -1082,6 +1123,7 @@ export class ExpenseTrackerStore extends AvBaseStore {
       await this.refreshCategories();
       this.categoryForm = defaultCategoryForm();
       this.success = "Category created.";
+      this.emitDrawerEvent("expense-drawer-close");
     } catch (err: any) {
       this.error = err?.message || "Unable to create category.";
     } finally {
