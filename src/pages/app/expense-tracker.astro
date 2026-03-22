@@ -470,6 +470,14 @@ const transactions = ((transactionsResult ?? []) as TransactionDTO[])
                 </select>
               </label>
               <label class="app-field">
+                <span class="app-label">Type</span>
+                <select class="app-input" :value="transactionForm.type" @change="setTransactionType($event.target.value)">
+                  <option value="expense">Expense</option>
+                  <option value="income">Income</option>
+                  <option value="transfer">Transfer</option>
+                </select>
+              </label>
+              <label class="app-field">
                 <span class="app-label">Category</span>
                 <select class="app-input" x-model="transactionForm.categoryId">
                   <option value="" x-text="transactionForm.type === 'transfer' ? 'No category for transfers' : 'Select category'"></option>
@@ -478,7 +486,17 @@ const transactions = ((transactionsResult ?? []) as TransactionDTO[])
                   </template>
                 </select>
               </label>
-
+              <template x-if="transactionForm.type === 'transfer'">
+                <label class="app-field">
+                  <span class="app-label">Destination account</span>
+                  <select class="app-input" x-model="transactionForm.transferAccountId">
+                    <option value="">Select destination account</option>
+                    <template x-for="account in visibleAccounts.filter((account) => account.id !== transactionForm.accountId)" :key="`transfer-create-${account.id}`">
+                      <option :value="account.id" x-text="account.name"></option>
+                    </template>
+                  </select>
+                </label>
+              </template>
               <template x-if="quickEntryType && quickEntryCommonCategories.length > 0">
                 <div class="app-field app-field-wide">
                   <span class="app-label">Common categories</span>
@@ -496,31 +514,12 @@ const transactions = ((transactionsResult ?? []) as TransactionDTO[])
                 </div>
               </template>
               <label class="app-field">
-                <span class="app-label">Type</span>
-                <select class="app-input" :value="transactionForm.type" @change="setTransactionType($event.target.value)">
-                  <option value="expense">Expense</option>
-                  <option value="income">Income</option>
-                  <option value="transfer">Transfer</option>
-                </select>
+                <span class="app-label">Currency code</span>
+                <input class="app-input" type="text" x-model="transactionForm.currency" maxlength="10" :placeholder="effectiveCurrencyCode || 'AED'" />
               </label>
-              <template x-if="transactionForm.type === 'transfer'">
-                <label class="app-field">
-                  <span class="app-label">Destination account</span>
-                  <select class="app-input" x-model="transactionForm.transferAccountId">
-                    <option value="">Select destination account</option>
-                    <template x-for="account in visibleAccounts.filter((account) => account.id !== transactionForm.accountId)" :key="`transfer-create-${account.id}`">
-                      <option :value="account.id" x-text="account.name"></option>
-                    </template>
-                  </select>
-                </label>
-              </template>
               <label class="app-field">
                 <span class="app-label">Amount</span>
                 <input class="app-input" type="number" step="0.01" x-model="transactionForm.amount" />
-              </label>
-              <label class="app-field">
-                <span class="app-label">Currency code</span>
-                <input class="app-input" type="text" x-model="transactionForm.currency" maxlength="10" :placeholder="effectiveCurrencyCode || 'AED'" />
               </label>
               <label class="app-field">
                 <span class="app-label">Date</span>
@@ -629,20 +628,20 @@ const transactions = ((transactionsResult ?? []) as TransactionDTO[])
                 </select>
               </label>
               <label class="app-field">
+                <span class="app-label">Type</span>
+                <select class="app-input" :value="transactionForm.type" @change="setTransactionType($event.target.value)">
+                  <option value="expense">Expense</option>
+                  <option value="income">Income</option>
+                  <option value="transfer">Transfer</option>
+                </select>
+              </label>
+              <label class="app-field">
                 <span class="app-label">Category</span>
                 <select class="app-input" x-model="transactionForm.categoryId">
                   <option value="" x-text="transactionForm.type === 'transfer' ? 'No category for transfers' : 'Select category'"></option>
                   <template x-for="category in transactionSelectableCategories" :key="category.id">
                     <option :value="category.id" x-text="category.name"></option>
                   </template>
-                </select>
-              </label>
-              <label class="app-field">
-                <span class="app-label">Type</span>
-                <select class="app-input" :value="transactionForm.type" @change="setTransactionType($event.target.value)">
-                  <option value="expense">Expense</option>
-                  <option value="income">Income</option>
-                  <option value="transfer">Transfer</option>
                 </select>
               </label>
               <template x-if="transactionForm.type === 'transfer'">
@@ -657,12 +656,12 @@ const transactions = ((transactionsResult ?? []) as TransactionDTO[])
                 </label>
               </template>
               <label class="app-field">
-                <span class="app-label">Amount</span>
-                <input class="app-input" type="number" step="0.01" x-model="transactionForm.amount" />
-              </label>
-              <label class="app-field">
                 <span class="app-label">Currency code</span>
                 <input class="app-input" type="text" x-model="transactionForm.currency" maxlength="10" :placeholder="effectiveCurrencyCode || 'AED'" />
+              </label>
+              <label class="app-field">
+                <span class="app-label">Amount</span>
+                <input class="app-input" type="number" step="0.01" x-model="transactionForm.amount" />
               </label>
               <label class="app-field">
                 <span class="app-label">Date</span>
